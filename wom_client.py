@@ -13,7 +13,7 @@ class WiseOldManClient:
         }
 
     def log(self, message):
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
         print(f"[{timestamp}] {message}")
 
     def _handle_response(self, response, context):
