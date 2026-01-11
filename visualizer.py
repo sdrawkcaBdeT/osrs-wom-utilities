@@ -122,7 +122,7 @@ def draw_variety_chart():
     output_path = f"reports/chart_variety_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
     plt.savefig(output_path, dpi=300)
     print(f"Saved: {output_path}")
-    
+
 # ==========================================
 # CHART 2: GANTT CHART (ACTIVITY LOG)
 # ==========================================
@@ -209,10 +209,92 @@ def draw_activity_gantt():
     plt.savefig(output_path, dpi=300)
     print(f"Saved: {output_path}")
 
+# ==========================================
+# CHART 3: CUMULATIVE XP LINE CHART
+# ==========================================
+
+def draw_cumulative_line_chart():
+    csv_file = get_latest_file("reports/timeseries_*.csv")
+    if not csv_file:
+        print("No Time Series CSV found. Run analyzer.py (Option 5) first.")
+        return
+
+    print(f"Drawing Line Chart from {csv_file}...")
+    df = pd.read_csv(csv_file)
+    
+    # Convert Timestamp
+    df['Timestamp'] = pd.to_datetime(df['Timestamp']).dt.tz_localize('UTC').dt.tz_convert(config.TIMEZONE)
+    
+    # Sort
+    df = df.sort_values('Timestamp')
+
+    fig, ax = plt.subplots(figsize=(14, 8))
+    
+    # Get unique players and assign colors
+    players = df['Username'].unique()
+    # Use a colormap that supports many distinct colors (tab20)
+    colors = plt.cm.tab20.colors 
+    
+    for i, player in enumerate(players):
+        player_data = df[df['Username'] == player]
+        
+        # Determine line style based on category (optional visual distinction)
+        category = player_data['Category'].iloc[0]
+        linestyle = '--' if category == 'suspected_bots' else '-'
+        linewidth = 2 if category == 'suspected_bots' else 1.5
+        
+        # Cycle through colors if we have more players than colors
+        color = colors[i % len(colors)]
+        
+        ax.plot(
+            player_data['Timestamp'], 
+            player_data['Total_XP'], 
+            label=player,
+            color=color,
+            marker='o',          # The circle marker
+            markersize=5,        # Size of the dot
+            linestyle=linestyle, 
+            linewidth=linewidth,
+            alpha=0.9
+        )
+
+    # Formatting Y-Axis (Millions/Thousands)
+    def human_format(num, pos):
+        magnitude = 0
+        while abs(num) >= 1000:
+            magnitude += 1
+            num /= 1000.0
+        return '%.1f%s' % (num, ['', 'K', 'M', 'B'][magnitude])
+
+    from matplotlib.ticker import FuncFormatter
+    ax.yaxis.set_major_formatter(FuncFormatter(human_format))
+
+    # Formatting X-Axis
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%a %H:%M', tz=local_tz))
+    plt.xticks(rotation=45, ha='right', fontproperties=body_font)
+    
+    # Labels
+    ax.set_title("Cumulative XP Progression (Last 7 Days)", fontproperties=title_font, pad=20)
+    ax.set_ylabel("Total Experience", fontproperties=label_font)
+    ax.set_xlabel(f"Time ({config.TIMEZONE})", fontproperties=label_font)
+    
+    ax.grid(True, linestyle='--', alpha=0.3)
+    
+    # Legend
+    ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', prop=body_font, title="Players")
+    
+    plt.tight_layout()
+    add_footer(ax)
+    
+    output_path = f"reports/chart_line_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
+    plt.savefig(output_path, dpi=300)
+    print(f"Saved: {output_path}")
+
 def main():
     print("1. Generate Variety Chart (Stacked Bar)")
     print("2. Generate Activity Gantt Chart")
-    print("3. Generate Both")
+    print("3. Generate Cumulative XP Line Chart")
+    print("4. Generate All")
     
     choice = input("Select: ")
     
@@ -221,8 +303,11 @@ def main():
     elif choice == '2':
         draw_activity_gantt()
     elif choice == '3':
+        draw_cumulative_line_chart()
+    elif choice == '4':
         draw_variety_chart()
         draw_activity_gantt()
+        draw_cumulative_line_chart()
 
 if __name__ == "__main__":
     main()
