@@ -39,7 +39,7 @@ def get_latest_file(pattern):
 
 def add_footer(ax):
     """Adds the 'Data as-of' footer."""
-    timestamp = datetime.now(local_tz).strftime("%Y-%m-%d %H:%M")
+    timestamp = datetime.now(local_tz).strftime("%Y/%m/%d %H:%M")
     plt.figtext(0.99, 0.01, f"Data as-of: {timestamp} {config.TIMEZONE}", 
                 horizontalalignment='right', 
                 fontproperties=body_font, 
@@ -59,32 +59,39 @@ def draw_variety_chart():
     print(f"Drawing Variety Chart from {csv_file}...")
     df = pd.read_csv(csv_file)
     
-    # Filter out users with 0 gains to prevent errors
+    # 1. Filter out users with 0 gains
     skills = [c for c in df.columns if c not in ['Username', 'Category']]
     df['Total_Gained'] = df[skills].sum(axis=1)
-    df = df[df['Total_Gained'] > 0]
+    df = df[df['Total_Gained'] > 0].copy()
 
-    # Normalize data to 100%
+    # 2. Normalize to 100%
+    # We create a new dataframe for percentages
     df_pct = df.copy()
     df_pct[skills] = df_pct[skills].div(df_pct['Total_Gained'], axis=0) * 100
 
-    # Sort by Category so bots are grouped together
+    # 3. Sort the Data
+    # We sort by Category first, then Username
     df_pct = df_pct.sort_values(by=['Category', 'Username'])
+    
+    # 4. Set the Index to Username
+    # This is the CRITICAL FIX. By setting the index, pandas aligns the math automatically.
+    df_pct.set_index('Username', inplace=True)
 
     # Plotting
     fig, ax = plt.subplots(figsize=(12, 8))
     
-    bottoms = pd.Series([0.0] * len(df_pct))
+    # Initialize bottoms using the DataFrame's index to ensure alignment
+    bottoms = pd.Series(0.0, index=df_pct.index)
     
     # Iterate through skills and stack bars
     for skill in skills:
         values = df_pct[skill]
         color = config.SKILL_COLORS.get(skill, "#000000")
         
-        # Only plot if there is data for this skill
+        # Only plot if there is data for this skill across the board
         if values.sum() > 0:
             ax.bar(
-                df_pct['Username'], 
+                df_pct.index,  # Use the index (Usernames) as X-axis
                 values, 
                 bottom=bottoms, 
                 label=skill.capitalize(), 
@@ -93,10 +100,11 @@ def draw_variety_chart():
                 linewidth=1.2,
                 width=0.6
             )
-            bottoms += values
+            # Add the current values to the bottom tracker
+            bottoms = bottoms.add(values, fill_value=0)
 
     # Formatting
-    ax.set_title("Skill Training Variety Distribution (Weekly)", fontproperties=title_font, pad=20)
+    ax.set_title("Skill Training Variety Distribution (Last 7 Days)", fontproperties=title_font, pad=20)
     ax.set_ylabel("Percentage of Total XP Gained (%)", fontproperties=label_font)
     ax.set_xlabel("Player Name", fontproperties=label_font)
     
@@ -104,9 +112,8 @@ def draw_variety_chart():
     plt.xticks(rotation=45, ha='right', fontproperties=body_font)
     plt.yticks(fontproperties=body_font)
     
-    # Legend (Put outside the plot)
+    # Legend
     handles, labels = ax.get_legend_handles_labels()
-    # Reverse legend so it matches stack order
     ax.legend(handles[::-1], labels[::-1], bbox_to_anchor=(1.02, 1), loc='upper left', prop=body_font)
 
     plt.tight_layout()
@@ -115,7 +122,7 @@ def draw_variety_chart():
     output_path = f"reports/chart_variety_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
     plt.savefig(output_path, dpi=300)
     print(f"Saved: {output_path}")
-
+    
 # ==========================================
 # CHART 2: GANTT CHART (ACTIVITY LOG)
 # ==========================================
