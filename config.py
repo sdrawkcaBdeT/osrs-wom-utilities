@@ -1,4 +1,9 @@
 # config.py
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ==========================================
 # USER CONFIGURATION
@@ -20,6 +25,9 @@ CYCLE_INTERVAL = 3600  # 1 Hour
 # 5 seconds = 12 requests per minute (Safe & Polite)
 REQUEST_DELAY = 5 
 
+# SECURE API KEY LOAD
+API_KEY = os.getenv("WOM_API_KEY")
+
 # ==========================================
 # PLAYER LISTS
 # ==========================================
@@ -36,7 +44,10 @@ PLAYER_LISTS = {
     "suspected_bots": [
         "BISKIEZ209", 
         "frostytimez", 
-        "xingyun 2025"
+        "xingyun 2025",
+        "Touroshui",
+        "geensliyh",
+        
     ],
     # You can add more lists easily here
     # "clan_mates": ["Name1", "Name2"],
