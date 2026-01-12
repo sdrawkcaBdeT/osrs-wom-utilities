@@ -11,13 +11,20 @@ class WiseOldManClient:
             "User-Agent": config.USER_AGENT,
             "Content-Type": "application/json"
         }
+        
+        # Add API Key if it exists in config
+        if config.API_KEY:
+            self.headers["x-api-key"] = config.API_KEY
 
     def log(self, message):
-        timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        """Helper to print messages with a timestamp."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"[{timestamp}] {message}")
 
     def _handle_response(self, response, context):
-        if response.status_code == 200:
+        """Internal helper to handle status codes."""
+        # UPDATE: Added 201 to success codes (for new players)
+        if response.status_code in [200, 201]:
             return response.json()
         elif response.status_code == 404:
             self.log(f"FAILED: {context} not found.")
@@ -31,31 +38,88 @@ class WiseOldManClient:
         return None
 
     def update_player(self, username):
+        """POST /players/:username - Update player data."""
         clean_username = username.strip()
         url = f"{self.base_url}/players/{clean_username}"
         try:
             self.log(f"Updating: {clean_username}...")
             response = requests.post(url, headers=self.headers)
-            if self._handle_response(response, clean_username):
-                self.log(f"SUCCESS: {clean_username} updated.")
+            
+            # Check response using the updated handler
+            data = self._handle_response(response, clean_username)
+            if data:
+                # Try to get the latest snapshot date for logging
+                latest = data.get('latestSnapshot', {}).get('createdAt', 'New Entry')
+                self.log(f"SUCCESS: {clean_username} updated. (Snapshot: {latest})")
                 return True
         except Exception as e:
             self.log(f"EXCEPTION: {e}")
         return False
 
-    def get_player_snapshots(self, username, period="week"):
-        """
-        Fetches the history of snapshots for a player.
-        Useful for calculating marginal gains between points in time.
-        """
+    def get_player_details(self, username):
+        """GET /players/:username - Get current stats/bosses."""
         clean_username = username.strip()
-        # Endpoint: /players/:username/snapshots?period={period}
-        url = f"{self.base_url}/players/{clean_username}/snapshots"
+        url = f"{self.base_url}/players/{clean_username}"
+        try:
+            response = requests.get(url, headers=self.headers)
+            return self._handle_response(response, clean_username)
+        except Exception as e:
+            self.log(f"EXCEPTION: {e}")
+            return None
+
+    def get_player_gains(self, username, period="week"):
+        """GET /players/:username/gained?period=week - Get gains."""
+        clean_username = username.strip()
+        url = f"{self.base_url}/players/{clean_username}/gained"
         params = {"period": period}
-        
         try:
             response = requests.get(url, headers=self.headers, params=params)
             return self._handle_response(response, clean_username)
+        except Exception as e:
+            self.log(f"EXCEPTION: {e}")
+            return None
+
+    def get_player_snapshots(self, username, period="week"):
+        """
+        GET /players/:username/snapshots
+        UPDATE: Handles pagination to fetch ALL snapshots for the period.
+        """
+        clean_username = username.strip()
+        url = f"{self.base_url}/players/{clean_username}/snapshots"
+        
+        all_snapshots = []
+        offset = 0
+        limit = 50 # Max allowed by API per request
+        
+        try:
+            while True:
+                params = {
+                    "period": period,
+                    "limit": limit,
+                    "offset": offset
+                }
+                
+                response = requests.get(url, headers=self.headers, params=params)
+                data = self._handle_response(response, clean_username)
+                
+                if not data:
+                    break
+                
+                # Add the fetched snapshots to our master list
+                all_snapshots.extend(data)
+                
+                # If we got fewer results than the limit, we have reached the end
+                if len(data) < limit:
+                    break
+                
+                # Otherwise, move the offset forward to get the next page
+                offset += limit
+                
+                # Polite delay between pages to avoid rate limits during heavy fetches
+                time.sleep(0.5)
+
+            return all_snapshots
+
         except Exception as e:
             self.log(f"EXCEPTION: {e}")
             return None
