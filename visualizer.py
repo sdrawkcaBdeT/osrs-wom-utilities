@@ -3,6 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.font_manager as fm
+import math
+import numpy as np
 import os
 import glob
 import pytz
@@ -37,10 +39,17 @@ def get_latest_file(pattern):
         return None
     return max(files, key=os.path.getctime)
 
-def add_footer(ax):
-    """Adds the 'Data as-of' footer."""
-    timestamp = datetime.now(local_tz).strftime("%Y/%m/%d %H:%M")
-    plt.figtext(0.99, 0.01, f"Data as-of: {timestamp} {config.TIMEZONE}", 
+def add_footer(ax_or_fig):
+    """Adds the 'Data as-of' footer. Accepts an Axes or Figure object."""
+    timestamp = datetime.now(local_tz).strftime("%Y-%m-%d %H:%M")
+    
+    # If we passed an Axes (single chart), get the Figure
+    if hasattr(ax_or_fig, 'figure'):
+        fig = ax_or_fig.figure
+    else:
+        fig = ax_or_fig
+
+    fig.text(0.99, 0.01, f"Data as-of: {timestamp} {config.TIMEZONE}", 
                 horizontalalignment='right', 
                 fontproperties=body_font, 
                 weight='bold',
@@ -210,90 +219,107 @@ def draw_activity_gantt():
     print(f"Saved: {output_path}")
 
 # ==========================================
-# CHART 3: CUMULATIVE XP LINE CHART
+# CHART 3: FACETED CUMULATIVE XP CHARTS
 # ==========================================
 
-def draw_cumulative_line_chart():
+def human_format(num, pos):
+    """Formats 1,200,000 as 1.2M"""
+    magnitude = 0
+    while abs(num) >= 1000:
+        magnitude += 1
+        num /= 1000.0
+    return '%.1f%s' % (num, ['', 'K', 'M', 'B'][magnitude])
+
+def draw_group_facet(df, category_name, filename_suffix):
+    """Helper to draw a grid of charts for a specific group."""
+    
+    # Get unique players in this category
+    players = df['Username'].unique()
+    if len(players) == 0:
+        print(f"No data for {category_name}, skipping chart.")
+        return
+
+    # Calculate Grid Dimensions (aim for 2 columns wide)
+    cols = 2
+    rows = math.ceil(len(players) / cols)
+    
+    # Create Figure
+    # Height increases with rows to keep charts readable
+    fig, axes = plt.subplots(rows, cols, figsize=(14, 5 * rows), squeeze=False)
+    fig.suptitle(f"Cumulative XP Progression: {category_name.replace('_', ' ').title()}", 
+                 fontproperties=title_font, fontsize=24, y=0.98)
+
+    # Flatten axes array for easy iteration
+    axes_flat = axes.flatten()
+
+    # Define Colors (one distinct color per player just for style)
+    colors = plt.cm.tab20.colors
+
+    for i, ax in enumerate(axes_flat):
+        if i < len(players):
+            player = players[i]
+            player_data = df[df['Username'] == player]
+            color = colors[i % len(colors)]
+
+            # PLOT
+            ax.plot(
+                player_data['Timestamp'], 
+                player_data['Total_XP'], 
+                color=color,
+                marker='o', 
+                markersize=4,
+                linewidth=2,
+                label=player
+            )
+
+            # FORMATTING (The "Scales=Free" magic happens here automatically)
+            ax.set_title(player, fontproperties=label_font, fontsize=14, color=color)
+            
+            # Y-Axis Formatting (Human Readable)
+            from matplotlib.ticker import FuncFormatter
+            ax.yaxis.set_major_formatter(FuncFormatter(human_format))
+            
+            # X-Axis Formatting
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%a %H:%M', tz=local_tz))
+            plt.setp(ax.get_xticklabels(), rotation=30, ha='right', fontsize=9)
+            
+            ax.grid(True, linestyle='--', alpha=0.3)
+        else:
+            # Turn off unused subplots (if you have 5 players in a 2x3 grid)
+            ax.axis('off')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.96]) # Make room for title and footer
+    add_footer(fig) # Pass fig to footer if needed, or adjust add_footer to accept fig
+
+    output_path = f"reports/chart_line_{filename_suffix}_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
+    plt.savefig(output_path, dpi=300)
+    print(f"Saved: {output_path}")
+
+def draw_faceted_cumulative_charts():
     csv_file = get_latest_file("reports/timeseries_*.csv")
     if not csv_file:
         print("No Time Series CSV found. Run analyzer.py (Option 5) first.")
         return
 
-    print(f"Drawing Line Chart from {csv_file}...")
+    print(f"Processing Time Series from {csv_file}...")
     df = pd.read_csv(csv_file)
     
     # Convert Timestamp
     df['Timestamp'] = pd.to_datetime(df['Timestamp']).dt.tz_localize('UTC').dt.tz_convert(config.TIMEZONE)
-    
-    # Sort
     df = df.sort_values('Timestamp')
 
-    fig, ax = plt.subplots(figsize=(14, 8))
-    
-    # Get unique players and assign colors
-    players = df['Username'].unique()
-    # Use a colormap that supports many distinct colors (tab20)
-    colors = plt.cm.tab20.colors 
-    
-    for i, player in enumerate(players):
-        player_data = df[df['Username'] == player]
-        
-        # Determine line style based on category (optional visual distinction)
-        category = player_data['Category'].iloc[0]
-        linestyle = '--' if category == 'suspected_bots' else '-'
-        linewidth = 2 if category == 'suspected_bots' else 1.5
-        
-        # Cycle through colors if we have more players than colors
-        color = colors[i % len(colors)]
-        
-        ax.plot(
-            player_data['Timestamp'], 
-            player_data['Total_XP'], 
-            label=player,
-            color=color,
-            marker='o',          # The circle marker
-            markersize=5,        # Size of the dot
-            linestyle=linestyle, 
-            linewidth=linewidth,
-            alpha=0.9
-        )
+    # 1. Draw Real Ones
+    df_real = df[df['Category'] == 'real_ones']
+    draw_group_facet(df_real, "Real Players", "real_ones")
 
-    # Formatting Y-Axis (Millions/Thousands)
-    def human_format(num, pos):
-        magnitude = 0
-        while abs(num) >= 1000:
-            magnitude += 1
-            num /= 1000.0
-        return '%.1f%s' % (num, ['', 'K', 'M', 'B'][magnitude])
-
-    from matplotlib.ticker import FuncFormatter
-    ax.yaxis.set_major_formatter(FuncFormatter(human_format))
-
-    # Formatting X-Axis
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%a %H:%M', tz=local_tz))
-    plt.xticks(rotation=45, ha='right', fontproperties=body_font)
-    
-    # Labels
-    ax.set_title("Cumulative XP Progression (Last 7 Days)", fontproperties=title_font, pad=20)
-    ax.set_ylabel("Total Experience", fontproperties=label_font)
-    ax.set_xlabel(f"Time ({config.TIMEZONE})", fontproperties=label_font)
-    
-    ax.grid(True, linestyle='--', alpha=0.3)
-    
-    # Legend
-    ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', prop=body_font, title="Players")
-    
-    plt.tight_layout()
-    add_footer(ax)
-    
-    output_path = f"reports/chart_line_{datetime.now().strftime('%Y%m%d_%H%M')}.png"
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved: {output_path}")
+    # 2. Draw Suspected Bots
+    df_bots = df[df['Category'] == 'suspected_bots']
+    draw_group_facet(df_bots, "Suspected Bots", "bots")
 
 def main():
     print("1. Generate Variety Chart (Stacked Bar)")
     print("2. Generate Activity Gantt Chart")
-    print("3. Generate Cumulative XP Line Chart")
+    print("3. Generate Faceted XP Charts (Real vs Bots)")
     print("4. Generate All")
     
     choice = input("Select: ")
@@ -303,11 +329,11 @@ def main():
     elif choice == '2':
         draw_activity_gantt()
     elif choice == '3':
-        draw_cumulative_line_chart()
+        draw_faceted_cumulative_charts()
     elif choice == '4':
         draw_variety_chart()
         draw_activity_gantt()
-        draw_cumulative_line_chart()
+        draw_faceted_cumulative_charts()
 
 if __name__ == "__main__":
     main()
