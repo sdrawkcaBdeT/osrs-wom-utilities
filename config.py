@@ -47,7 +47,10 @@ PLAYER_LISTS = {
         "xingyun 2025",
         "Touroshui",
         "geensliyh",
-        
+        "gigidere",
+        "triunhiji",
+        ""
+               
     ],
     # You can add more lists easily here
     # "clan_mates": ["Name1", "Name2"],
