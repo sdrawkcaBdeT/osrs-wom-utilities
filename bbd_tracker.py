@@ -18,84 +18,89 @@ if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
 if not os.path.exists(IMG_DIR): os.makedirs(IMG_DIR)
 
 # --- MASTER DROP TABLE ---
-# Rate = Probability of drop per kill.
-# Qty = Average quantity per drop.
 DROP_TABLE = {
-    "Dragon Bones":       {"rate": 1.0, "qty": 1, "cat": "Guaranteed"},
-    "Black D-hide":       {"rate": 1.0, "qty": 2, "cat": "Guaranteed"},
+    "Dragon bones":       {"rate": 1.0, "qty": 1, "cat": "Guaranteed"},
+    "Black dragonhide":       {"rate": 1.0, "qty": 2, "cat": "Guaranteed"},
     
     # Uniques (1/512)
-    "Dragon Platelegs":   {"rate": 1/512, "qty": 1, "cat": "Unique"},
-    "Dragon Plateskirt":  {"rate": 1/512, "qty": 1, "cat": "Unique"},
-    "Dragon Spear":       {"rate": 1/512, "qty": 1, "cat": "Unique"}, 
-    "Uncut Dragonstone":  {"rate": 1/512, "qty": 1, "cat": "Unique"},
+    "Dragon platelegs":   {"rate": 1/512, "qty": 1, "cat": "Unique"},
+    "Dragon plateskirt":  {"rate": 1/512, "qty": 1, "cat": "Unique"},
+    "Dragon spear":       {"rate": 1/512, "qty": 1, "cat": "Unique"}, 
+    "Uncut dragonstone":  {"rate": 1/512, "qty": 1, "cat": "Unique"},
     
     # Weapons/Armor
-    "Rune Hasta":         {"rate": 1/12.8, "qty": 1, "cat": "Gear"},
-    "Rune Spear":         {"rate": 1/12.8, "qty": 1, "cat": "Gear"},
-    "Rune Platelegs":     {"rate": 1/18.29, "qty": 1, "cat": "Gear"},
-    "Rune Full Helm":     {"rate": 1/21.33, "qty": 2, "cat": "Gear"}, # Note: Drops 2
-    "Rune Dart":          {"rate": 1/25.6, "qty": 20, "cat": "Gear"},
-    "Rune Longsword":     {"rate": 1/25.6, "qty": 1, "cat": "Gear"},
-    "Black D-hide Body":  {"rate": 1/64, "qty": 1, "cat": "Gear"},
-    "Rune Knife":         {"rate": 1/64, "qty": 25, "cat": "Gear"},
-    "Rune Thrownaxe":     {"rate": 1/64, "qty": 30, "cat": "Gear"},
-    "Black D-hide Vamb":  {"rate": 1/128, "qty": 1, "cat": "Gear"},
-    "Rune Platebody":     {"rate": 1/128, "qty": 1, "cat": "Gear"},
-    "Dragon Med Helm":    {"rate": 1/128, "qty": 1, "cat": "Gear"},
-    "Dragon Longsword":   {"rate": 1/128, "qty": 1, "cat": "Gear"},
-    "Dragon Dagger":      {"rate": 1/128, "qty": 1, "cat": "Gear"},
+    "Rune spear":         {"rate": 1/12.8, "qty": 1, "cat": "Gear"},
+    "Rune platelegs":     {"rate": 1/18.29, "qty": 1, "cat": "Gear"},
+    "Rune full helm":     {"rate": 1/21.33, "qty": 2, "cat": "Gear"},
+    "Rune dart":          {"rate": 1/25.6, "qty": 20, "cat": "Gear"},
+    "Rune longsword":     {"rate": 1/25.6, "qty": 1, "cat": "Gear"},
+    "Black d'hide body":  {"rate": 1/64, "qty": 1, "cat": "Gear"},
+    "Rune knife":         {"rate": 1/64, "qty": 25, "cat": "Gear"},
+    "Rune thrownaxe":     {"rate": 1/64, "qty": 30, "cat": "Gear"},
+    "Black d'hide vambraces":  {"rate": 1/128, "qty": 1, "cat": "Gear"},
+    "Rune platebody":     {"rate": 1/128, "qty": 1, "cat": "Gear"},
+    "Dragon med helm":    {"rate": 1/128, "qty": 1, "cat": "Gear"},
+    "Dragon longsword":   {"rate": 1/128, "qty": 1, "cat": "Gear"},
+    "Dragon dagger":      {"rate": 1/128, "qty": 1, "cat": "Gear"},
 
     # Runes/Ammo
-    "Rune Javelin":       {"rate": 1/16, "qty": 50, "cat": "Ammo"},
-    "Blood Rune":         {"rate": 1/16, "qty": 50, "cat": "Ammo"},
-    "Soul Rune":          {"rate": 1/16, "qty": 50, "cat": "Ammo"},
-    "Death Rune":         {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
-    "Law Rune":           {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
-    "Rune Arrow":         {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
+    "Rune javelin":       {"rate": 1/16, "qty": 50, "cat": "Ammo"},
+    "Blood rune":         {"rate": 1/16, "qty": 50, "cat": "Ammo"},
+    "Soul rune":          {"rate": 1/16, "qty": 50, "cat": "Ammo"},
+    "Death rune":         {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
+    "Law rune":           {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
+    "Rune arrow":         {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
+    
 
     # Materials
-    "Lava Scale":         {"rate": 1/32, "qty": 5, "cat": "Mats"},
-    "Dragon Dart Tip":    {"rate": 1/42.67, "qty": 40, "cat": "Mats"},
-    "Runite Ore":         {"rate": 1/64, "qty": 3, "cat": "Mats"},
-    "Dragon Arrowtips":   {"rate": 1/64, "qty": 40, "cat": "Mats"},
-    "Dragon Javelin Heads":{"rate": 1/64, "qty": 40, "cat": "Mats"},
+    "Lava scale":         {"rate": 1/32, "qty": 5, "cat": "Mats"},
+    "Dragon dart tip":    {"rate": 1/42.67, "qty": 40, "cat": "Mats"},
+    "Runite ore":         {"rate": 1/64, "qty": 3, "cat": "Mats"},
+    "Dragon arrowtips":   {"rate": 1/64, "qty": 40, "cat": "Mats"},
+    "Dragon javelin heads":{"rate": 1/64, "qty": 40, "cat": "Mats"},
+
+    # Coins
+    "Coins":              {"rate": 1/10.66, "qty": 400, "cat": "Coins"},
+
+    # Other
+    "Anglerfish":         {"rate": 1/16, "qty": 2, "cat": "Other"},
 
     # RDT / Rare
-    "Loop Half of Key":    {"rate": 1/378, "qty": 1, "cat": "RDT"},
-    "Tooth Half of Key":   {"rate": 1/378, "qty": 1, "cat": "RDT"},
-    "Shield Left Half":    {"rate": 1/15738, "qty": 1, "cat": "RDT"},
-    "Uncut Sapphire":      {"rate": 1/154, "qty": 1, "cat": "RDT"},
-    "Uncut Emerald":       {"rate": 1/309, "qty": 1, "cat": "RDT"},
-    "Uncut Ruby":          {"rate": 1/618, "qty": 1, "cat": "RDT"},
-    "Uncut Diamond":       {"rate": 1/2473, "qty": 1, "cat": "RDT"},
+    "Loop half of key":    {"rate": 1/378, "qty": 1, "cat": "RDT"},
+    "Tooth half of key":   {"rate": 1/378, "qty": 1, "cat": "RDT"},
+    "Shield left half":    {"rate": 1/15738, "qty": 1, "cat": "RDT"},
+    "Uncut sapphire":      {"rate": 1/154, "qty": 1, "cat": "RDT"},
+    "Uncut emerald":       {"rate": 1/309, "qty": 1, "cat": "RDT"},
+    "Uncut ruby":          {"rate": 1/618, "qty": 1, "cat": "RDT"},
+    "Uncut diamond":       {"rate": 1/2473, "qty": 1, "cat": "RDT"},
     
     # Tertiary
-    "Ensouled Dragon Head":{"rate": 1/20, "qty": 1, "cat": "Tertiary"},
-    "Clue Scroll (hard)":  {"rate": 1/128, "qty": 1, "cat": "Tertiary"},
-    "Clue Scroll (elite)": {"rate": 1/250, "qty": 1, "cat": "Tertiary"},
-    "Draconic Visage":     {"rate": 1/10000, "qty": 1, "cat": "Tertiary"},
-    "Ancient Shard":       {"rate": 1/123, "qty": 1, "cat": "Catacombs"},
-    "Dark Totem Base":     {"rate": 1/185, "qty": 1, "cat": "Catacombs"},
+    "Ensouled dragon head":{"rate": 1/20, "qty": 1, "cat": "Tertiary"},
+    "Clue scroll (hard)":  {"rate": 1/128, "qty": 1, "cat": "Tertiary"},
+    "Clue scroll (elite)": {"rate": 1/250, "qty": 1, "cat": "Tertiary"},
+    "Draconic visage":     {"rate": 1/10000, "qty": 1, "cat": "Tertiary"},
+    "Ancient shard":       {"rate": 1/123, "qty": 1, "cat": "Catacombs"},
+    "Dark totem base":     {"rate": 1/185, "qty": 1, "cat": "Catacombs"},
     "Dark Totem Middle":   {"rate": 1/185, "qty": 1, "cat": "Catacombs"},
     "Dark Totem Top":      {"rate": 1/185, "qty": 1, "cat": "Catacombs"}
 }
 
-# ID to Name Map
+# ID to Name Map (Updated based on your JSON data)
 ITEM_MAP = {
-    536: "Dragon Bones", 1747: "Black D-hide",
-    4087: "Dragon Platelegs", 4585: "Dragon Plateskirt", 1249: "Dragon Spear", 1615: "Uncut Dragonstone",
-    11388: "Rune Hasta", 1247: "Rune Spear", 1079: "Rune Platelegs", 1163: "Rune Full Helm",
-    811: "Rune Dart", 1201: "Rune Kite", 1303: "Rune Longsword", 2503: "Black D-hide Body",
-    868: "Rune Knife", 805: "Rune Thrownaxe", 2491: "Black D-hide Vamb", 1127: "Rune Platebody",
-    1149: "Dragon Med Helm", 1305: "Dragon Longsword", 1215: "Dragon Dagger",
-    830: "Rune Javelin", 565: "Blood Rune", 566: "Soul Rune", 560: "Death Rune", 563: "Law Rune", 892: "Rune Arrow",
-    11992: "Lava Scale", 11232: "Dragon Dart Tip", 451: "Runite Ore", 11237: "Dragon Arrowtips", 19582: "Dragon Javelin Heads",
-    11286: "Draconic Visage", 2722: "Clue Scroll (hard)", 12073: "Clue Scroll (elite)", 13421: "Ensouled Dragon Head",
-    19677: "Ancient Shard", 19679: "Dark Totem Base", 19681: "Dark Totem Middle", 19683: "Dark Totem Top",
+    536: "Dragon bones", 1747: "Black dragonhide", 13441: "Anglerfish",
+    4087: "Dragon platelegs", 4585: "Dragon plateskirt", 1249: "Dragon spear", 1631: "Uncut dragonstone", 1615: "Uncut dragonstone",
+    11388: "Rune hasta", 1247: "Rune spear", 1079: "Rune platelegs", 1163: "Rune full helm",
+    811: "Rune dart", 1201: "Rune kite", 1303: "Rune longsword", 2503: "Black d'hide body",
+    868: "Rune knife", 805: "Rune thrownaxe", 2491: "Black d'hide vambraces", 1127: "Rune platebody",
+    1149: "Dragon med helm", 1305: "Dragon longsword", 1215: "Dragon dagger",
+    830: "Rune javelin", 565: "Blood rune", 566: "Soul rune", 560: "Death rune", 563: "Law rune", 892: "Rune arrow",
+    11993: "Lava scale", 11992: "Lava scale", 11232: "Dragon dart tip", 452: "Runite ore", 451: "Runite ore",
+    11237: "Dragon arrowtips", 19582: "Dragon javelin heads",
+    11286: "Draconic visage", 2722: "Clue scroll (hard)", 12073: "Clue scroll (elite)", 13510: "Ensouled dragon head", 13511: "Ensouled dragon head",
+    19677: "Ancient shard", 19679: "Dark totem base", 19681: "Dark totem middle", 19683: "Dark totem top",
     995: "Coins",
-    987: "Loop Half of Key", 985: "Tooth Half of Key", 2366: "Shield Left Half",
-    1623: "Uncut Sapphire", 1621: "Uncut Emerald", 1619: "Uncut Ruby", 1617: "Uncut Diamond"
+    987: "Loop half of key", 985: "Tooth half of key", 2366: "Shield left half",
+    1623: "Uncut sapphire", 1621: "Uncut emerald", 1619: "Uncut ruby", 1617: "Uncut diamond"
 }
 
 # --- FLASK SERVER ---
@@ -116,7 +121,7 @@ def run_server():
 class BBDTrackerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("BBD Laboratory v9 (Granular Data)")
+        self.title("BBD Laboratory v10 (All-Time Stats)")
         self.geometry("1400x900")
         ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("green")
@@ -151,17 +156,15 @@ class BBDTrackerApp(ctk.CTk):
         self.entry_exp_name = ctk.CTkEntry(self.panel_left, placeholder_text="Session Name")
         self.entry_exp_name.pack(fill="x", padx=5, pady=5)
 
-        # Full Config Fields
-        self.cfg_ammo = self.create_dropdown("Ammo Slot", ["Diamond bolts (e)", "Ruby bolts (e)", "Dragon arrows", "Rune arrows", "Amethyst Broad Bolts"])
-        self.cfg_weapon = self.create_dropdown("Weapon", ["Dragon Hunter Crossbow", "Twisted Bow", "Rune Crossbow", "Bow of Faerdhinen"])
+        self.cfg_ammo = self.create_dropdown("Ammo Slot", ["Diamond bolts (e)", "Diamond dragon bolts (e)", "Dragonstone bolts (e)", "Pearl dragon bolts (e)", "Emerald dragon bolts (e)", "Opal dragon bolts (e)"])
+        self.cfg_weapon = self.create_dropdown("Weapon", ["Dragon hunter crossbow", "Twisted bow", "Dragon crossbow","Rune crossbow"])
         self.cfg_ring = self.create_dropdown("Ring Slot", ["Ring of the gods (i)", "Archers ring (i)", "Venator Ring"])
-        self.cfg_back = self.create_dropdown("Back Slot", ["Ranging cape (t)", "Ava's assembler", "Dizana's Quiver"])
-        self.cfg_feet = self.create_dropdown("Feet Slot", ["Pegasian boots", "God D'hide Boots", "Shayzien Boots"])
+        self.cfg_back = self.create_dropdown("Back Slot", ["Ranging cape (t)", "Ava's accumulator","Ava's assembler", "Dizana's Quiver"])
+        self.cfg_feet = self.create_dropdown("Feet Slot", ["Pegasian boots", "God d'hide boots", "Avernic treads (max)"])
         self.cfg_pray = self.create_dropdown("Prayer Method", ["Rigour", "Eagle Eye", "Deadeye"])
-        self.cfg_tele = self.create_dropdown("Teleport Method", ["Xeric's Talisman", "Book of Darkness", "House Tab"])
-        self.cfg_bank = self.create_dropdown("Bank Method", ["Ring of dueling", "Crafting cape", "Farming Cape"])
+        self.cfg_tele = self.create_dropdown("Teleport Method", ["Xeric's Talisman", "Book of Darkness"])
+        self.cfg_bank = self.create_dropdown("Bank Method", ["Ring of dueling", "Crafting cape"])
 
-        # Stats Box (Moved below config)
         ctk.CTkLabel(self.panel_left, text="--- LIVE STATS ---", font=("Arial", 12, "bold"), text_color="gray").pack(pady=(20,5))
         self.lbl_timer = ctk.CTkLabel(self.panel_left, text="00:00:00", font=("Courier New", 24, "bold"))
         self.lbl_timer.pack(pady=5)
@@ -189,18 +192,31 @@ class BBDTrackerApp(ctk.CTk):
         self.log_box = ctk.CTkTextbox(self.panel_center, font=("Consolas", 12))
         self.log_box.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        # === RIGHT PANEL ===
+        # === RIGHT PANEL (Tabs) ===
         self.panel_right_container = ctk.CTkFrame(self)
         self.panel_right_container.grid(row=0, column=2, sticky="nsew", padx=10, pady=10)
         
+        # Header with Refresh
         header = ctk.CTkFrame(self.panel_right_container, height=30, fg_color="transparent")
         header.pack(fill="x", padx=5, pady=5)
         ctk.CTkLabel(header, text="LOOT ANALYSIS", font=("Arial", 16, "bold")).pack(side="left")
-        ctk.CTkButton(header, text="🔄 Refresh", width=80, command=self.refresh_loot_table).pack(side="right")
+        ctk.CTkButton(header, text="🔄 Refresh Stats", width=120, command=self.refresh_all_tables).pack(side="right")
 
-        self.loot_scroll = ctk.CTkScrollableFrame(self.panel_right_container)
-        self.loot_scroll.pack(fill="both", expand=True)
+        # Tabs
+        self.tabs = ctk.CTkTabview(self.panel_right_container)
+        self.tabs.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        self.tab_current = self.tabs.add("Current Session")
+        self.tab_all_time = self.tabs.add("All-Time")
 
+        # Scrollable Frames inside Tabs
+        self.scroll_current = ctk.CTkScrollableFrame(self.tab_current)
+        self.scroll_current.pack(fill="both", expand=True)
+        
+        self.scroll_all_time = ctk.CTkScrollableFrame(self.tab_all_time)
+        self.scroll_all_time.pack(fill="both", expand=True)
+
+    # --- UI HELPERS ---
     def create_stat_box(self, parent, label, value, ref_name):
         frame = ctk.CTkFrame(parent, fg_color="#252525")
         frame.pack(fill="x", pady=5, padx=5)
@@ -245,7 +261,7 @@ class BBDTrackerApp(ctk.CTk):
         self.log_box.delete("1.0", "end")
         
         self.log_event("session_start", "Session Started")
-        self.refresh_loot_table()
+        self.refresh_all_tables()
 
     def stop_session(self):
         if not self.is_active: return
@@ -256,6 +272,7 @@ class BBDTrackerApp(ctk.CTk):
         
         self.log_event("session_end", "Session Ended")
         self.save_data()
+        self.refresh_all_tables()
 
     def on_close(self):
         if self.is_active: self.stop_session()
@@ -267,17 +284,9 @@ class BBDTrackerApp(ctk.CTk):
     def log_event(self, type_, val):
         ts_iso = self.get_iso_time()
         ts_display = datetime.datetime.now().strftime("%H:%M:%S")
-        
-        # UI Log
         self.log_box.insert("end", f"[{ts_display}] {val}\n")
         self.log_box.see("end")
-        
-        # Data Log
-        self.event_log.append({
-            "timestamp": ts_iso,
-            "type": type_,
-            "value": val
-        })
+        self.event_log.append({"timestamp": ts_iso, "type": type_, "value": val})
 
     def save_data(self):
         if not self.session_id: return
@@ -321,36 +330,94 @@ class BBDTrackerApp(ctk.CTk):
     def add_loot(self, item_name, qty):
         self.loot_tracker[item_name] = self.loot_tracker.get(item_name, 0) + qty
 
-    def refresh_loot_table(self):
-        for widget in self.loot_scroll.winfo_children(): widget.destroy()
+    # --- AGGREGATION & RENDERING ---
+    
+    def refresh_all_tables(self):
+        # 1. Render Current Session
+        self.render_table(self.scroll_current, self.loot_tracker, self.kill_count, show_all=False)
+        
+        # 2. Calculate All-Time Stats
+        all_time_kills, all_time_loot = self.calculate_all_time_stats()
+        
+        # 3. Render All-Time
+        self.render_table(self.scroll_all_time, all_time_loot, all_time_kills, show_all=True)
+
+    def calculate_all_time_stats(self):
+        total_kills = 0
+        total_loot = {}
+
+        # 1. Load from Disk
+        for filename in os.listdir(DATA_DIR):
+            if filename.endswith(".json"):
+                try:
+                    with open(os.path.join(DATA_DIR, filename), 'r') as f:
+                        data = json.load(f)
+                        total_kills += data.get("total_kills", 0)
+                        
+                        # Merge loot
+                        session_loot = data.get("loot_summary", {})
+                        for item, qty in session_loot.items():
+                            total_loot[item] = total_loot.get(item, 0) + qty
+                except:
+                    pass
+        
+        # 2. Add Current Session (Live Data)
+        if self.is_active:
+            # We don't double count if session is saved, but session ID check is complex.
+            # Simpler: If active, exclude current session ID from disk load? 
+            # Actually, `save_data` overwrites the file. 
+            # So if we load from disk, we might load the current session if it was saved.
+            # BUT, we only save on STOP. So disk data is usually old.
+            # Let's assume disk = old, memory = new.
+            # NOTE: If you click "Stop & Save", it writes to disk. 
+            # If we then calculate, we might double count if we aren't careful.
+            # Fix: Only add self variables if session is NOT in the file list yet.
+            if f"{self.session_id}.json" not in os.listdir(DATA_DIR):
+                total_kills += self.kill_count
+                for item, qty in self.loot_tracker.items():
+                    total_loot[item] = total_loot.get(item, 0) + qty
+
+        return total_kills, total_loot
+
+    def render_table(self, parent_frame, loot_data, kills, show_all=False):
+        for widget in parent_frame.winfo_children(): widget.destroy()
         
         headers = ["", "Item", "Actual", "Expected", "Luck"]
         for i, h in enumerate(headers):
-            ctk.CTkLabel(self.loot_scroll, text=h, font=("Arial", 12, "bold")).grid(row=0, column=i, padx=5, pady=5, sticky="w")
+            ctk.CTkLabel(parent_frame, text=h, font=("Arial", 12, "bold")).grid(row=0, column=i, padx=5, pady=5, sticky="w")
 
-        all_items = set(DROP_TABLE.keys()) | set(self.loot_tracker.keys())
-        sorted_items = sorted(list(all_items), key=lambda x: (DROP_TABLE.get(x, {}).get("cat", "Z") != "Unique", x))
+        # Determine items to show
+        if show_all:
+            # Show everything in DROP_TABLE
+            items_to_show = list(DROP_TABLE.keys())
+        else:
+            # Only show what we have found (plus Uniques/Guaranteed for context)
+            items_to_show = list(set(loot_data.keys()) | {k for k,v in DROP_TABLE.items() if v['cat'] in ['Guaranteed', 'Unique']})
+
+        # Sort
+        sorted_items = sorted(items_to_show, key=lambda x: (DROP_TABLE.get(x, {}).get("cat", "Z") != "Unique", x))
 
         row_idx = 1
         for name in sorted_items:
-            actual = self.loot_tracker.get(name, 0)
+            actual = loot_data.get(name, 0)
             drop_info = DROP_TABLE.get(name, {})
             rate = drop_info.get("rate", 0)
-            avg_qty = drop_info.get("qty", 1) # UPDATED MATH
+            avg_qty = drop_info.get("qty", 1)
             
-            if actual == 0 and drop_info.get("cat") not in ["Unique", "Guaranteed"]: continue
+            # Skip if count is 0 and we are in "Current Session" mode (unless unique/guaranteed)
+            if not show_all and actual == 0 and drop_info.get("cat") not in ["Unique", "Guaranteed"]: 
+                continue
 
-            expected = self.kill_count * rate * avg_qty # UPDATED MATH
+            expected = kills * rate * avg_qty
             
             luck_text = "-"
             luck_color = "gray"
-            if self.kill_count > 0 and rate > 0 and rate < 1.0:
-                # For Luck, we care about "Events" (Drops), not "Quantity" (Items)
-                # If avg drop is 20 darts, getting 20 darts is 1 event.
-                # Approx events = Actual / Avg_Qty
+            
+            if kills > 0 and rate > 0 and rate < 1.0:
                 events_actual = actual / avg_qty
-                cdf = binom.cdf(int(events_actual), self.kill_count, rate)
+                cdf = binom.cdf(int(events_actual), kills, rate)
                 percentile = cdf * 100
+                
                 if actual > expected:
                     luck_text = f"Top {100-percentile:.1f}%"
                     luck_color = "#4caf50"
@@ -361,14 +428,17 @@ class BBDTrackerApp(ctk.CTk):
                 luck_text = "100%"
                 luck_color = "#4caf50"
 
-            img = self.load_image(name)
-            if img: ctk.CTkLabel(self.loot_scroll, text="", image=img).grid(row=row_idx, column=0, padx=2, pady=2)
-            else: ctk.CTkLabel(self.loot_scroll, text="?").grid(row=row_idx, column=0, padx=2, pady=2)
+            # Dim text if 0 found in All-Time view
+            text_color = "white" if actual > 0 else "gray"
 
-            ctk.CTkLabel(self.loot_scroll, text=name, anchor="w").grid(row=row_idx, column=1, sticky="w", padx=5)
-            ctk.CTkLabel(self.loot_scroll, text=str(actual)).grid(row=row_idx, column=2, padx=5)
-            ctk.CTkLabel(self.loot_scroll, text=f"{expected:.1f}").grid(row=row_idx, column=3, padx=5)
-            ctk.CTkLabel(self.loot_scroll, text=luck_text, text_color=luck_color).grid(row=row_idx, column=4, padx=5)
+            img = self.load_image(name)
+            if img: ctk.CTkLabel(parent_frame, text="", image=img).grid(row=row_idx, column=0, padx=2, pady=2)
+            else: ctk.CTkLabel(parent_frame, text="?").grid(row=row_idx, column=0, padx=2, pady=2)
+
+            ctk.CTkLabel(parent_frame, text=name, anchor="w", text_color=text_color).grid(row=row_idx, column=1, sticky="w", padx=5)
+            ctk.CTkLabel(parent_frame, text=str(actual), text_color=text_color).grid(row=row_idx, column=2, padx=5)
+            ctk.CTkLabel(parent_frame, text=f"{expected:.1f}", text_color=text_color).grid(row=row_idx, column=3, padx=5)
+            ctk.CTkLabel(parent_frame, text=luck_text, text_color=luck_color).grid(row=row_idx, column=4, padx=5)
             row_idx += 1
 
     def manual_kill(self):
@@ -379,12 +449,11 @@ class BBDTrackerApp(ctk.CTk):
         self.lbl_kills.configure(text=str(self.kill_count))
         source = "Manual" if manual else "Auto"
         
-        # Log Kill Event (Granular)
         self.log_event("kill", f"Kill Confirmed ({source})")
         
         # Guaranteed
-        self.add_loot("Dragon Bones", 1)
-        self.add_loot("Black D-hide", 2)
+        self.add_loot("Dragon bones", 1)
+        self.add_loot("Black dragonhide", 2)
         
         # Variable
         if loot_items:
@@ -393,11 +462,11 @@ class BBDTrackerApp(ctk.CTk):
                 qty = item.get('qty')
                 name = ITEM_MAP.get(i_id, f"Item {i_id}")
                 
-                if name not in ["Dragon Bones", "Black D-hide"]:
+                if name not in ["Dragon bones", "Black dragonhide"]:
                     self.add_loot(name, qty)
                     self.log_event("loot", f"-> {qty}x {name}")
         
-        self.refresh_loot_table()
+        self.refresh_all_tables()
 
     def process_event(self, event_type, payload):
         if not self.is_active: return
