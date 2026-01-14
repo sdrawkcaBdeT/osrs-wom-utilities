@@ -57,7 +57,7 @@ DROP_TABLE = {
     "Dragon dart tip":    {"rate": 1/42.67, "qty": 40, "cat": "Mats"},
     "Runite ore":         {"rate": 1/64, "qty": 3, "cat": "Mats"},
     "Dragon arrowtips":   {"rate": 1/64, "qty": 40, "cat": "Mats"},
-    "Dragon javelin heads":{"rate": 1/64, "qty": 40, "cat": "Mats"},
+    "Dragon javelin tips":{"rate": 1/64, "qty": 40, "cat": "Mats"},
 
     # Coins
     "Coins":              {"rate": 1/10.66, "qty": 400, "cat": "Coins"},
@@ -95,7 +95,7 @@ ITEM_MAP = {
     1149: "Dragon med helm", 1305: "Dragon longsword", 1215: "Dragon dagger",
     830: "Rune javelin", 565: "Blood rune", 566: "Soul rune", 560: "Death rune", 563: "Law rune", 892: "Rune arrow",
     11993: "Lava scale", 11992: "Lava scale", 11232: "Dragon dart tip", 452: "Runite ore", 451: "Runite ore",
-    11237: "Dragon arrowtips", 19582: "Dragon javelin heads",
+    11237: "Dragon arrowtips", 19582: "Dragon javelin tips",
     11286: "Draconic visage", 2722: "Clue scroll (hard)", 12073: "Clue scroll (elite)", 13510: "Ensouled dragon head", 13511: "Ensouled dragon head",
     19677: "Ancient shard", 19679: "Dark totem base", 19681: "Dark totem middle", 19683: "Dark totem top",
     995: "Coins",
