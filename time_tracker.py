@@ -1,7 +1,8 @@
 import customtkinter as ctk
 import sqlite3
 import datetime
-from dateutil import parser
+import os
+from dateutil import parser, relativedelta
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.patches import Patch
@@ -11,9 +12,15 @@ from tkinter import messagebox
 
 # --- CONFIGURATION ---
 DB_NAME = "time_tracker.db"
+REPORT_DIR = "reports"
+CSV_NAME = "time_tracking_history.csv"
 GOAL_HOURS_PER_DAY = 1.0
-THEME_COLOR = "green"  # CTK Theme
-APP_SIZE = "1100x700"
+THEME_COLOR = "green" 
+APP_SIZE = "1200x800"
+
+# Ensure report directory exists
+if not os.path.exists(REPORT_DIR):
+    os.makedirs(REPORT_DIR)
 
 # --- DATABASE MANAGER ---
 class DatabaseManager:
@@ -48,16 +55,29 @@ class DatabaseManager:
         conn.close()
         return df
 
+    def export_to_csv(self):
+        """Mirrors the DB to a CSV file for external analysis."""
+        try:
+            df = self.get_dataframe()
+            # Add some derived columns for easier analysis in Excel/R
+            df['start_timestamp'] = pd.to_datetime(df['start_timestamp'])
+            df['end_timestamp'] = pd.to_datetime(df['end_timestamp'])
+            df['duration_hours'] = (df['end_timestamp'] - df['start_timestamp']).dt.total_seconds() / 3600
+            
+            path = os.path.join(REPORT_DIR, CSV_NAME)
+            df.to_csv(path, index=False)
+            print(f"Data auto-exported to {path}")
+        except Exception as e:
+            print(f"Export failed: {e}")
+
 # --- UI COMPONENTS ---
 
 class EditorFrame(ctk.CTkFrame):
-    """The Spreadsheet-style editor embedded in a tab."""
     def __init__(self, master, db):
         super().__init__(master)
         self.db = db
         self.rows = []
         
-        # Controls
         self.ctrl_frame = ctk.CTkFrame(self, height=40)
         self.ctrl_frame.pack(fill="x", padx=10, pady=5)
         
@@ -67,29 +87,24 @@ class EditorFrame(ctk.CTkFrame):
         self.btn_save = ctk.CTkButton(self.ctrl_frame, text="Save Changes", command=self.save_changes, fg_color="green", width=100)
         self.btn_save.pack(side="left", padx=5)
 
-        # Scrollable Grid
         self.scroll = ctk.CTkScrollableFrame(self, label_text="Edit Recent Logs (Top 50)")
         self.scroll.pack(fill="both", expand=True, padx=10, pady=5)
         
         self.load_data()
 
     def load_data(self):
-        # Clear existing
         for widget in self.scroll.winfo_children():
             widget.destroy()
         self.rows = []
 
-        # Headers
         headers = ["ID", "Start Time (YYYY-MM-DD HH:MM:SS)", "End Time", "Type (WORK/BREAK)"]
         for i, h in enumerate(headers):
             ctk.CTkLabel(self.scroll, text=h, font=("Arial", 12, "bold")).grid(row=0, column=i, padx=5, pady=5, sticky="w")
 
-        # Fetch Data
         data = self.db.run_query("SELECT id, start_timestamp, end_timestamp, type FROM shifts ORDER BY start_timestamp DESC LIMIT 50")
 
         for idx, (row_id, start, end, type_) in enumerate(data):
             r = idx + 1
-            
             lbl_id = ctk.CTkLabel(self.scroll, text=str(row_id), width=30)
             lbl_id.grid(row=r, column=0, padx=5)
 
@@ -114,47 +129,65 @@ class EditorFrame(ctk.CTkFrame):
                 e_txt = e_end.get()
                 t_txt = e_type.get()
 
-                # Basic Validation
-                if s_txt: parser.parse(s_txt) # Check format
+                if s_txt: parser.parse(s_txt)
                 if e_txt and e_txt != "None": parser.parse(e_txt)
                 else: e_txt = None
 
                 self.db.run_query("UPDATE shifts SET start_timestamp=?, end_timestamp=?, type=? WHERE id=?", 
                                   (s_txt, e_txt, t_txt, row_id))
             
-            # Show a temporary success label or print
             print("Saved successfully.")
-            self.load_data() # Reload to confirm
+            self.db.export_to_csv() # Trigger Auto-Export
+            self.load_data()
         except Exception as e:
             tk.messagebox.showerror("Save Error", f"Could not save changes.\nCheck date formats.\nError: {e}")
 
 
 class AnalysisFrame(ctk.CTkFrame):
-    """The Visualization Dashboard with Date Navigation."""
     def __init__(self, master, db):
         super().__init__(master)
         self.db = db
         self.current_date = datetime.date.today()
-        self.view_mode = "week" # or 'month'
+        self.view_mode = "Week" 
 
         # --- Top Controls ---
-        self.ctrl_frame = ctk.CTkFrame(self, height=50)
+        self.ctrl_frame = ctk.CTkFrame(self)
         self.ctrl_frame.pack(fill="x", padx=10, pady=10)
 
-        self.btn_prev = ctk.CTkButton(self.ctrl_frame, text="< Prev", width=60, command=lambda: self.change_date(-1))
+        # Row 1: View Selection
+        self.seg_view = ctk.CTkSegmentedButton(self.ctrl_frame, values=["Today", "3-Day", "Week", "Month", "Custom"], command=self.change_view_mode)
+        self.seg_view.set("Week")
+        self.seg_view.pack(pady=5)
+
+        # Row 2: Navigation & Custom Inputs
+        self.nav_frame = ctk.CTkFrame(self.ctrl_frame, fg_color="transparent")
+        self.nav_frame.pack(fill="x", pady=5)
+
+        self.btn_prev = ctk.CTkButton(self.nav_frame, text="< Prev", width=60, command=lambda: self.change_date(-1))
         self.btn_prev.pack(side="left", padx=5)
 
-        self.lbl_date_range = ctk.CTkLabel(self.ctrl_frame, text="Date Range", font=("Arial", 16, "bold"), width=250)
+        self.lbl_date_range = ctk.CTkLabel(self.nav_frame, text="Date Range", font=("Arial", 16, "bold"), width=250)
         self.lbl_date_range.pack(side="left", padx=5)
 
-        self.btn_next = ctk.CTkButton(self.ctrl_frame, text="Next >", width=60, command=lambda: self.change_date(1))
+        self.btn_next = ctk.CTkButton(self.nav_frame, text="Next >", width=60, command=lambda: self.change_date(1))
         self.btn_next.pack(side="left", padx=5)
 
-        self.btn_refresh = ctk.CTkButton(self.ctrl_frame, text="Refresh Chart", command=self.update_chart, fg_color="#555555")
-        self.btn_refresh.pack(side="right", padx=5)
+        # Custom Date Inputs (Hidden by default)
+        self.custom_frame = ctk.CTkFrame(self.ctrl_frame, fg_color="transparent")
+        self.ent_custom_start = ctk.CTkEntry(self.custom_frame, placeholder_text="YYYY-MM-DD")
+        self.ent_custom_start.pack(side="left", padx=5)
+        ctk.CTkLabel(self.custom_frame, text="to").pack(side="left")
+        self.ent_custom_end = ctk.CTkEntry(self.custom_frame, placeholder_text="YYYY-MM-DD")
+        self.ent_custom_end.pack(side="left", padx=5)
+        self.btn_custom_go = ctk.CTkButton(self.custom_frame, text="Go", width=50, command=self.update_chart)
+        self.btn_custom_go.pack(side="left", padx=5)
 
-        self.btn_export = ctk.CTkButton(self.ctrl_frame, text="Export PNG", command=self.export_chart, fg_color="#D4AF37", text_color="black")
+        # Right Side Tools
+        self.btn_export = ctk.CTkButton(self.nav_frame, text="Export PNG", command=self.export_chart, fg_color="#D4AF37", text_color="black", width=100)
         self.btn_export.pack(side="right", padx=5)
+        
+        self.btn_refresh = ctk.CTkButton(self.nav_frame, text="Refresh", command=self.update_chart, fg_color="#555555", width=80)
+        self.btn_refresh.pack(side="right", padx=5)
 
         # --- Stats Bar ---
         self.stats_frame = ctk.CTkFrame(self, height=40, fg_color="transparent")
@@ -167,7 +200,7 @@ class AnalysisFrame(ctk.CTkFrame):
         self.chart_frame.pack(fill="both", expand=True, padx=10, pady=10)
         
         self.fig, self.ax = plt.subplots(figsize=(10, 5), dpi=100)
-        self.fig.patch.set_facecolor('#2b2b2b') # Match Dark Mode
+        self.fig.patch.set_facecolor('#2b2b2b') 
         self.ax.set_facecolor('#2b2b2b')
         
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.chart_frame)
@@ -175,45 +208,83 @@ class AnalysisFrame(ctk.CTkFrame):
 
         self.update_chart()
 
-    def change_date(self, direction):
-        if self.view_mode == "week":
-            delta = datetime.timedelta(weeks=1)
+    def change_view_mode(self, value):
+        self.view_mode = value
+        if value == "Custom":
+            self.nav_frame.pack_forget()
+            self.custom_frame.pack(pady=5)
         else:
+            self.custom_frame.pack_forget()
+            self.nav_frame.pack(fill="x", pady=5)
+            self.update_chart()
+
+    def change_date(self, direction):
+        if self.view_mode == "Week":
+            delta = datetime.timedelta(weeks=1)
+        elif self.view_mode == "Month":
+            # Rough month approximation for navigation
             delta = datetime.timedelta(days=30)
+        elif self.view_mode == "3-Day":
+            delta = datetime.timedelta(days=3)
+        elif self.view_mode == "Today":
+            delta = datetime.timedelta(days=1)
+        else:
+            return 
         
         if direction == 1: self.current_date += delta
         else: self.current_date -= delta
         self.update_chart()
 
     def get_date_range(self):
-        # Calculate start/end of the current week (Monday start)
-        start = self.current_date - datetime.timedelta(days=self.current_date.weekday())
-        end = start + datetime.timedelta(days=6)
-        return start, end
+        if self.view_mode == "Custom":
+            try:
+                s = parser.parse(self.ent_custom_start.get()).date()
+                e = parser.parse(self.ent_custom_end.get()).date()
+                return s, e
+            except:
+                return datetime.date.today(), datetime.date.today()
+
+        if self.view_mode == "Today":
+            return self.current_date, self.current_date
+        
+        if self.view_mode == "3-Day":
+            # Current date and previous 2 days
+            start = self.current_date - datetime.timedelta(days=2)
+            return start, self.current_date
+
+        if self.view_mode == "Week":
+            # Start Monday, End Sunday
+            start = self.current_date - datetime.timedelta(days=self.current_date.weekday())
+            end = start + datetime.timedelta(days=6)
+            return start, end
+
+        if self.view_mode == "Month":
+            # 1st to Last
+            start = self.current_date.replace(day=1)
+            next_month = start + relativedelta.relativedelta(months=1)
+            end = next_month - datetime.timedelta(days=1)
+            return start, end
+            
+        return self.current_date, self.current_date
 
     def update_chart(self):
         start_date, end_date = self.get_date_range()
         self.lbl_date_range.configure(text=f"{start_date.strftime('%b %d')} - {end_date.strftime('%b %d, %Y')}")
 
-        # Fetch Data
         df = self.db.get_dataframe()
         if df.empty: return
 
-        # Preprocessing
         df['start_timestamp'] = pd.to_datetime(df['start_timestamp'])
         df['end_timestamp'] = pd.to_datetime(df['end_timestamp'])
         
-        # Filter by date range (include midnight overlap logic)
         mask = (df['start_timestamp'].dt.date <= end_date) & \
                ((df['end_timestamp'].dt.date >= start_date) | (df['end_timestamp'].isna()))
         df_view = df.loc[mask].copy()
 
-        # Handle Active Shifts (Set end to Now for visualization)
         now = datetime.datetime.now()
         df_view['end_timestamp'] = df_view['end_timestamp'].fillna(now)
 
-        # --- DATA PROCESSING FOR GANTT ---
-        plot_data = {} # {date: {'work': [(start, dur)], 'break': []}}
+        plot_data = {} 
         total_seconds = 0
 
         for _, row in df_view.iterrows():
@@ -221,14 +292,11 @@ class AnalysisFrame(ctk.CTkFrame):
             e = row['end_timestamp']
             typ = row['type']
 
-            # Split across midnight
             current = s
             while current < e:
-                # Find end of current day
                 next_midnight = (current + datetime.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
                 segment_end = min(e, next_midnight)
                 
-                # Check if this segment is within our view range
                 if start_date <= current.date() <= end_date:
                     d_key = current.date()
                     if d_key not in plot_data: plot_data[d_key] = {'work': [], 'break': []}
@@ -244,7 +312,6 @@ class AnalysisFrame(ctk.CTkFrame):
 
                 current = next_midnight
 
-        # --- CALCULATE STATS ---
         days_in_view = (end_date - start_date).days + 1
         total_hours = total_seconds / 3600
         goal = days_in_view * GOAL_HOURS_PER_DAY
@@ -253,14 +320,11 @@ class AnalysisFrame(ctk.CTkFrame):
         color = "green" if variance >= 0 else "red"
         self.lbl_stats.configure(text=f"Total: {total_hours:.2f} hrs  |  Goal: {goal:.1f} hrs  |  Variance: {variance:+.2f} hrs", text_color=color)
 
-        # --- DRAW PLOT ---
         self.ax.clear()
         
-        # Y-Axis Setup
         dates_list = [start_date + datetime.timedelta(days=x) for x in range((end_date-start_date).days + 1)]
         y_ticks = range(len(dates_list))
         
-        # Draw Bars
         for i, d in enumerate(dates_list):
             if d in plot_data:
                 if plot_data[d]['work']:
@@ -268,19 +332,15 @@ class AnalysisFrame(ctk.CTkFrame):
                 if plot_data[d]['break']:
                     self.ax.broken_barh(plot_data[d]['break'], (i - 0.4, 0.8), facecolors='#FFC107', edgecolor='white', linewidth=0.5)
 
-        # Styling
         self.ax.set_yticks(y_ticks)
         self.ax.set_yticklabels([d.strftime("%a %d") for d in dates_list], color='white')
         self.ax.set_ylim(-0.5, len(dates_list) - 0.5)
-        
         self.ax.set_xlim(0, 24)
         self.ax.set_xticks(range(0, 25, 2))
         self.ax.set_xticklabels(range(0, 25, 2), color='white')
         self.ax.set_xlabel("Hour of Day", color='white')
-        
         self.ax.grid(True, axis='x', linestyle='--', alpha=0.2, color='white')
         
-        # Spine colors
         self.ax.spines['bottom'].set_color('white')
         self.ax.spines['top'].set_color('white') 
         self.ax.spines['left'].set_color('white')
@@ -288,7 +348,6 @@ class AnalysisFrame(ctk.CTkFrame):
         self.ax.tick_params(axis='x', colors='white')
         self.ax.tick_params(axis='y', colors='white')
 
-        # Legend
         legend_elements = [Patch(facecolor='#4CAF50', label='Work'),
                            Patch(facecolor='#FFC107', label='Break')]
         self.ax.legend(handles=legend_elements, loc='upper right', facecolor='#2b2b2b', edgecolor='white', labelcolor='white')
@@ -302,21 +361,19 @@ class AnalysisFrame(ctk.CTkFrame):
 
 
 class DashboardFrame(ctk.CTkFrame):
-    """The Main 'Clock In' Interface."""
     def __init__(self, master, db, update_callback):
         super().__init__(master)
         self.db = db
-        self.update_callback = update_callback # To refresh charts when we clock out
+        self.update_callback = update_callback 
         
         self.is_working = False
         self.on_break = False
         self.current_session_id = None
         self.start_time = None
 
-        # --- UI LAYOUT ---
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1) # Spacer top
-        self.grid_rowconfigure(4, weight=1) # Spacer bottom
+        self.grid_rowconfigure(0, weight=1) 
+        self.grid_rowconfigure(4, weight=1) 
 
         self.lbl_timer = ctk.CTkLabel(self, text="00:00:00", font=("Roboto Mono", 80, "bold"))
         self.lbl_timer.grid(row=1, column=0, pady=20)
@@ -336,7 +393,6 @@ class DashboardFrame(ctk.CTkFrame):
         self.update_clock()
 
     def check_active_session(self):
-        # Check DB for open shift
         res = self.db.run_query("SELECT session_group_id, start_timestamp, type FROM shifts WHERE end_timestamp IS NULL ORDER BY start_timestamp DESC LIMIT 1")
         if res:
             self.current_session_id, start_str, type_ = res[0]
@@ -366,9 +422,6 @@ class DashboardFrame(ctk.CTkFrame):
 
     def get_current_duration(self):
         if self.start_time:
-            # Simple duration from start of CURRENT segment
-            # Note: For total session time, we'd need to sum previous segments in DB. 
-            # Keeping it simple for the visual timer.
             delta = datetime.datetime.now() - self.start_time
             return str(delta).split('.')[0] 
         return "00:00:00"
@@ -381,43 +434,42 @@ class DashboardFrame(ctk.CTkFrame):
     def toggle_work(self):
         now = datetime.datetime.now()
         if not self.is_working:
-            # START
             self.is_working = True
             self.start_time = now
             self.current_session_id = f"SESSION_{int(now.timestamp())}"
             self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type) VALUES (?, ?, ?)",
                               (self.current_session_id, now, 'WORK'))
             self.set_ui_state("working")
+            self.db.export_to_csv() # Auto-Export
         else:
-            # STOP
             self.db.run_query("UPDATE shifts SET end_timestamp = ? WHERE session_group_id = ? AND end_timestamp IS NULL",
                               (now, self.current_session_id))
             self.is_working = False
             self.on_break = False
             self.start_time = None
             self.set_ui_state("idle")
-            self.update_callback() # Refresh charts
+            self.db.export_to_csv() # Auto-Export
+            self.update_callback() 
 
     def toggle_break(self):
         now = datetime.datetime.now()
-        # Close current segment
         self.db.run_query("UPDATE shifts SET end_timestamp = ? WHERE session_group_id = ? AND end_timestamp IS NULL",
                           (now, self.current_session_id))
         
         if not self.on_break:
-            # Start Break
             self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type) VALUES (?, ?, ?)",
                               (self.current_session_id, now, 'BREAK'))
             self.on_break = True
-            self.start_time = now # Reset timer for break duration
+            self.start_time = now
             self.set_ui_state("break")
         else:
-            # Resume Work
             self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type) VALUES (?, ?, ?)",
                               (self.current_session_id, now, 'WORK'))
             self.on_break = False
-            self.start_time = now # Reset timer for work duration
+            self.start_time = now 
             self.set_ui_state("working")
+        
+        self.db.export_to_csv() # Auto-Export
 
 
 # --- MAIN APP ---
@@ -433,7 +485,6 @@ class TimeTrackerApp(ctk.CTk):
 
         self.db = DatabaseManager(DB_NAME)
 
-        # Tab View
         self.tab_view = ctk.CTkTabview(self)
         self.tab_view.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -441,8 +492,6 @@ class TimeTrackerApp(ctk.CTk):
         self.tab_view.add("History & Analysis")
         self.tab_view.add("Editor")
 
-        # Initialize Frames
-        # We pass a lambda to dashboard so it can tell Analysis to refresh when a shift ends
         self.analysis_frame = AnalysisFrame(self.tab_view.tab("History & Analysis"), self.db)
         self.dashboard_frame = DashboardFrame(self.tab_view.tab("Tracker"), self.db, self.analysis_frame.update_chart)
         self.editor_frame = EditorFrame(self.tab_view.tab("Editor"), self.db)
