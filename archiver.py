@@ -16,9 +16,6 @@ class MasterArchive:
         """Create the master table if it doesn't exist."""
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
-        
-        # We store the raw JSON data so we can extract ANY skill later, 
-        # even if we didn't think of it today.
         c.execute('''CREATE TABLE IF NOT EXISTS snapshots (
                         id INTEGER PRIMARY KEY,
                         username TEXT,
@@ -47,15 +44,18 @@ class MasterArchive:
         last_sync = self.get_last_timestamp(username)
         snapshots = []
 
+        # LOGIC UPDATE: Use Project Start Date
         if last_sync:
             print(f"   -> Found local data up to {last_sync}. Fetching newer...")
-            # WOM API expects ISO dates. 
-            # Note: We add 1 second to avoid grabbing the duplicate last entry
             snapshots = self.client.get_player_snapshots(username, start_date=last_sync)
         else:
-            print(f"   -> No local data. Fetching FULL HISTORY (This may take time)...")
-            # No start_date = Fetch everything
-            snapshots = self.client.get_player_snapshots(username)
+            start_date = getattr(config, 'PROJECT_START_DATE', None)
+            if start_date:
+                print(f"   -> First sync. Fetching history starting from {start_date}...")
+                snapshots = self.client.get_player_snapshots(username, start_date=start_date)
+            else:
+                print(f"   -> First sync. Fetching FULL HISTORY (No start date configured)...")
+                snapshots = self.client.get_player_snapshots(username)
 
         if not snapshots:
             print("   -> Up to date.")
@@ -69,7 +69,6 @@ class MasterArchive:
         for snap in snapshots:
             try:
                 ts = snap['createdAt']
-                # Basic stats for easy SQL querying
                 total_xp = snap['data']['skills']['overall']['experience']
                 ehp = snap['data']['computed']['ehp']['value']
                 
