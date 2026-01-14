@@ -28,6 +28,11 @@ REQUEST_DELAY = 5
 # SECURE API KEY LOAD
 API_KEY = os.getenv("WOM_API_KEY")
 
+# --- PROJECT START DATE ---
+# The Archiver will ignore any data before this date.
+# Format: ISO 8601 String (YYYY-MM-DD)
+PROJECT_START_DATE = "2026-01-04T00:00:00"
+
 # ==========================================
 # PLAYER LISTS
 # ==========================================
