@@ -49,7 +49,6 @@ PLAYER_LISTS = {
         "geensliyh",
         "gigidere",
         "triunhiji",
-        ""
                
     ],
     # You can add more lists easily here
