@@ -26,6 +26,17 @@ USAGE EXAMPLES:
    > python datahub.py sync
    * Only updates the local SQLite database with the latest WOM data.
 -------------------------------------------------------------------------
+
+    python datahub.py engine -> Starts Tracking (Background).
+
+    python bbd_tracker.py -> Starts Lab (Foreground, when you play).
+
+    python tracker.py -> Starts Clock (Foreground, for accountability).
+
+    python datahub.py report -> Generates Macro Charts (WOM data).
+
+    python datahub.py bbd -> Generates Micro Charts (Kill Velocity).
+
 """
 
 import argparse
@@ -40,6 +51,7 @@ from wom_client import WiseOldManClient
 import archiver
 import analyzer
 import visualizer
+import bbd_visualizer
 
 def log(msg):
     print(f"[\033[96mDATAHUB\033[0m] {msg}")
@@ -125,22 +137,35 @@ def run_pipeline(skip_archive=False):
     log(f"Pipeline Complete in {elapsed:.2f} seconds.")
     log(f"Check the /reports folder for your content.")
 
+    # --- COMMAND: RUN BBD ANALYSIS ---
+def run_bbd_analysis():
+    log("Running BBD Micro-Analysis...")
+    try:
+        sessions = bbd_visualizer.load_sessions()
+        if not sessions:
+            log("No valid BBD sessions found in /bbd_data.")
+            return
+        
+        log(f"Found {len(sessions)} sessions. Generating charts...")
+        bbd_visualizer.draw_velocity_comparison(sessions)
+        log("BBD Analysis Complete.")
+    except Exception as e:
+        print(f"BBD Visualizer failed: {e}")
+
 # --- CLI HANDLER ---
 def main():
     parser = argparse.ArgumentParser(description="OSRS Data Orchestrator")
-    
-    # Define commands
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
-    # Command: engine
-    subparsers.add_parser('engine', help='Start the continuous tracking engine (main.py)')
+    subparsers.add_parser('engine', help='Start the continuous tracking engine')
     
-    # Command: report
-    parser_report = subparsers.add_parser('report', help='Run the full analysis & visualization pipeline')
-    parser_report.add_argument('--quick', action='store_true', help='Skip the Archive Sync step (Faster)')
+    parser_report = subparsers.add_parser('report', help='Run the WOM analysis pipeline')
+    parser_report.add_argument('--quick', action='store_true', help='Skip Archive Sync')
 
-    # Command: sync
-    subparsers.add_parser('sync', help='Only run the Archiver')
+    subparsers.add_parser('sync', help='Only run the WOM Archiver')
+    
+    # NEW COMMAND
+    subparsers.add_parser('bbd', help='Run the BBD Experiment Analysis')
 
     args = parser.parse_args()
 
@@ -151,8 +176,9 @@ def main():
     elif args.command == 'sync':
         log("Running Manual Sync...")
         archiver.MasterArchive().run_sync()
+    elif args.command == 'bbd':
+        run_bbd_analysis()
     else:
-        # If no args, print help
         parser.print_help()
 
 if __name__ == "__main__":
