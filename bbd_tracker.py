@@ -20,7 +20,7 @@ if not os.path.exists(IMG_DIR): os.makedirs(IMG_DIR)
 # --- MASTER DROP TABLE ---
 DROP_TABLE = {
     "Dragon bones":       {"rate": 1.0, "qty": 1, "cat": "Guaranteed"},
-    "Black dragonhide":       {"rate": 1.0, "qty": 2, "cat": "Guaranteed"},
+    "Black dragonhide":   {"rate": 1.0, "qty": 2, "cat": "Guaranteed"},
     
     # Uniques (1/512)
     "Dragon platelegs":   {"rate": 1/512, "qty": 1, "cat": "Unique"},
@@ -37,7 +37,7 @@ DROP_TABLE = {
     "Black d'hide body":  {"rate": 1/64, "qty": 1, "cat": "Gear"},
     "Rune knife":         {"rate": 1/64, "qty": 25, "cat": "Gear"},
     "Rune thrownaxe":     {"rate": 1/64, "qty": 30, "cat": "Gear"},
-    "Black d'hide vambraces":  {"rate": 1/128, "qty": 1, "cat": "Gear"},
+    "Black d'hide vambraces": {"rate": 1/128, "qty": 1, "cat": "Gear"},
     "Rune platebody":     {"rate": 1/128, "qty": 1, "cat": "Gear"},
     "Dragon med helm":    {"rate": 1/128, "qty": 1, "cat": "Gear"},
     "Dragon longsword":   {"rate": 1/128, "qty": 1, "cat": "Gear"},
@@ -50,7 +50,6 @@ DROP_TABLE = {
     "Death rune":         {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
     "Law rune":           {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
     "Rune arrow":         {"rate": 1/18.29, "qty": 75, "cat": "Ammo"},
-    
 
     # Materials
     "Lava scale":         {"rate": 1/32, "qty": 5, "cat": "Mats"},
@@ -85,7 +84,7 @@ DROP_TABLE = {
     "Dark Totem Top":      {"rate": 1/185, "qty": 1, "cat": "Catacombs"}
 }
 
-# ID to Name Map (Updated based on your JSON data)
+# ID to Name Map
 ITEM_MAP = {
     536: "Dragon bones", 1747: "Black dragonhide", 13441: "Anglerfish",
     4087: "Dragon platelegs", 4585: "Dragon plateskirt", 1249: "Dragon spear", 1631: "Uncut dragonstone", 1615: "Uncut dragonstone",
@@ -117,11 +116,36 @@ def handle_event():
 def run_server():
     server.run(host=HOST, port=PORT, debug=False, use_reloader=False)
 
+# --- UI COMPONENT: COLLAPSIBLE FRAME ---
+class CollapsibleFrame(ctk.CTkFrame):
+    def __init__(self, parent, title="Setup"):
+        super().__init__(parent)
+        self.columnconfigure(0, weight=1)
+        self.is_expanded = True
+        
+        self.btn_toggle = ctk.CTkButton(
+            self, text=f"▼ {title}", command=self.toggle, 
+            fg_color="transparent", text_color="gray", hover_color="#333", anchor="w"
+        )
+        self.btn_toggle.grid(row=0, column=0, sticky="ew")
+        
+        self.content_frame = ctk.CTkFrame(self)
+        self.content_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+
+    def toggle(self):
+        if self.is_expanded:
+            self.content_frame.grid_forget()
+            self.btn_toggle.configure(text=f"▶ {self.btn_toggle.cget('text')[2:]}")
+        else:
+            self.content_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+            self.btn_toggle.configure(text=f"▼ {self.btn_toggle.cget('text')[2:]}")
+        self.is_expanded = not self.is_expanded
+
 # --- GUI APP ---
 class BBDTrackerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("BBD Laboratory v10 (All-Time Stats)")
+        self.title("BBD Laboratory v11 (Dashboard Mode)")
         self.geometry("1400x900")
         ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("green")
@@ -149,29 +173,52 @@ class BBDTrackerApp(ctk.CTk):
         self.grid_columnconfigure(2, weight=3) 
         self.grid_rowconfigure(0, weight=1)
 
-        # === LEFT PANEL (Setup) ===
-        self.panel_left = ctk.CTkScrollableFrame(self, label_text="EXPERIMENT SETUP")
+        # === LEFT PANEL (Container) ===
+        self.panel_left = ctk.CTkFrame(self)
         self.panel_left.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.panel_left.grid_columnconfigure(0, weight=1)
         
-        self.entry_exp_name = ctk.CTkEntry(self.panel_left, placeholder_text="Session Name")
-        self.entry_exp_name.pack(fill="x", padx=5, pady=5)
-
-        self.cfg_ammo = self.create_dropdown("Ammo Slot", ["Diamond bolts (e)", "Diamond dragon bolts (e)", "Dragonstone bolts (e)", "Pearl dragon bolts (e)", "Emerald dragon bolts (e)", "Opal dragon bolts (e)"])
-        self.cfg_weapon = self.create_dropdown("Weapon", ["Dragon hunter crossbow", "Twisted bow", "Dragon crossbow","Rune crossbow"])
-        self.cfg_ring = self.create_dropdown("Ring Slot", ["Ring of the gods (i)", "Archers ring (i)", "Venator Ring"])
-        self.cfg_back = self.create_dropdown("Back Slot", ["Ranging cape (t)", "Ava's accumulator","Ava's assembler", "Dizana's Quiver"])
-        self.cfg_feet = self.create_dropdown("Feet Slot", ["Pegasian boots", "God d'hide boots", "Avernic treads (max)"])
-        self.cfg_pray = self.create_dropdown("Prayer Method", ["Rigour", "Eagle Eye", "Deadeye"])
-        self.cfg_tele = self.create_dropdown("Teleport Method", ["Xeric's Talisman", "Book of Darkness"])
-        self.cfg_bank = self.create_dropdown("Bank Method", ["Ring of dueling", "Crafting cape"])
-
-        ctk.CTkLabel(self.panel_left, text="--- LIVE STATS ---", font=("Arial", 12, "bold"), text_color="gray").pack(pady=(20,5))
-        self.lbl_timer = ctk.CTkLabel(self.panel_left, text="00:00:00", font=("Courier New", 24, "bold"))
+        # 1. LIVE STATS (Pinned to Top)
+        self.stats_container = ctk.CTkFrame(self.panel_left, fg_color="transparent")
+        self.stats_container.pack(fill="x", padx=5, pady=10)
+        
+        ctk.CTkLabel(self.stats_container, text="LIVE DASHBOARD", font=("Arial", 16, "bold"), text_color="#4caf50").pack(pady=(0,5))
+        self.lbl_timer = ctk.CTkLabel(self.stats_container, text="00:00:00", font=("Courier New", 32, "bold"))
         self.lbl_timer.pack(pady=5)
         
-        self.create_stat_box(self.panel_left, "Current Phase", "IDLE", "lbl_phase")
-        self.create_stat_box(self.panel_left, "Dragons Killed", "0", "lbl_kills")
-        self.create_stat_box(self.panel_left, "Est. Kills/Hr", "0.0", "lbl_kph")
+        self.create_stat_box(self.stats_container, "Current Phase", "IDLE", "lbl_phase")
+        self.create_stat_box(self.stats_container, "Dragons Killed", "0", "lbl_kills")
+        self.create_stat_box(self.stats_container, "Est. Kills/Hr", "0.0", "lbl_kph")
+
+        ctk.CTkFrame(self.panel_left, height=2, fg_color="#333").pack(fill="x", pady=15) # Divider
+
+        # 2. SESSION CONFIG (Scrollable Area)
+        self.scroll_setup = ctk.CTkScrollableFrame(self.panel_left, fg_color="transparent", label_text="SESSION CONFIG")
+        self.scroll_setup.pack(fill="both", expand=True)
+
+        # Name & Mode
+        self.entry_exp_name = ctk.CTkEntry(self.scroll_setup, placeholder_text="Session Name (Optional)")
+        self.entry_exp_name.pack(fill="x", padx=5, pady=5)
+
+        ctk.CTkLabel(self.scroll_setup, text="Session Mode:", font=("Arial", 11)).pack(anchor="w", padx=5)
+        self.mode_selector = ctk.CTkSegmentedButton(self.scroll_setup, values=["Experimental", "Casual"])
+        self.mode_selector.set("Experimental")
+        self.mode_selector.pack(fill="x", padx=5, pady=(0, 10))
+
+        # Collapsible Gear Setup
+        self.gear_frame = CollapsibleFrame(self.scroll_setup, title="Gear & Loadout")
+        self.gear_frame.pack(fill="x", padx=5, pady=5)
+        
+        # Add dropdowns to the content frame of the collapsible widget
+        gf = self.gear_frame.content_frame
+        self.cfg_ammo = self.create_dropdown(gf, "Ammo Slot", ["Diamond bolts (e)", "Diamond dragon bolts (e)", "Dragonstone bolts (e)", "Pearl dragon bolts (e)", "Emerald dragon bolts (e)", "Opal dragon bolts (e)"])
+        self.cfg_weapon = self.create_dropdown(gf, "Weapon", ["Dragon hunter crossbow", "Twisted bow", "Dragon crossbow","Rune crossbow"])
+        self.cfg_ring = self.create_dropdown(gf, "Ring Slot", ["Ring of the gods (i)", "Archers ring (i)", "Venator Ring"])
+        self.cfg_back = self.create_dropdown(gf, "Back Slot", ["Ranging cape (t)", "Ava's accumulator","Ava's assembler", "Dizana's Quiver"])
+        self.cfg_feet = self.create_dropdown(gf, "Feet Slot", ["Pegasian boots", "God d'hide boots", "Avernic treads (max)"])
+        self.cfg_pray = self.create_dropdown(gf, "Prayer Method", ["Rigour", "Eagle Eye", "Deadeye"])
+        self.cfg_tele = self.create_dropdown(gf, "Teleport Method", ["Xeric's Talisman", "Book of Darkness"])
+        self.cfg_bank = self.create_dropdown(gf, "Bank Method", ["Ring of dueling", "Crafting cape"])
 
         # === CENTER PANEL ===
         self.panel_center = ctk.CTkFrame(self)
@@ -219,15 +266,15 @@ class BBDTrackerApp(ctk.CTk):
     # --- UI HELPERS ---
     def create_stat_box(self, parent, label, value, ref_name):
         frame = ctk.CTkFrame(parent, fg_color="#252525")
-        frame.pack(fill="x", pady=5, padx=5)
+        frame.pack(fill="x", pady=5)
         ctk.CTkLabel(frame, text=label, font=("Arial", 10)).pack(anchor="w", padx=5, pady=(5,0))
         lbl = ctk.CTkLabel(frame, text=value, font=("Arial", 18, "bold"), text_color="#4caf50")
         lbl.pack(anchor="w", padx=5, pady=(0,5))
         setattr(self, ref_name, lbl)
 
-    def create_dropdown(self, label, values):
-        frame = ctk.CTkFrame(self.panel_left, fg_color="transparent")
-        frame.pack(fill="x", padx=5, pady=2)
+    def create_dropdown(self, parent, label, values):
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        frame.pack(fill="x", padx=2, pady=2)
         ctk.CTkLabel(frame, text=label, font=("Arial", 10)).pack(anchor="w")
         opt = ctk.CTkOptionMenu(frame, values=values)
         opt.pack(fill="x")
@@ -260,7 +307,13 @@ class BBDTrackerApp(ctk.CTk):
         self.btn_manual_kill.configure(state="normal", fg_color="#d32f2f")
         self.log_box.delete("1.0", "end")
         
-        self.log_event("session_start", "Session Started")
+        mode = self.mode_selector.get()
+        self.log_event("session_start", f"Session Started ({mode})")
+        
+        # Auto-collapse gear on start for cleaner view
+        if self.gear_frame.is_expanded:
+            self.gear_frame.toggle()
+            
         self.refresh_all_tables()
 
     def stop_session(self):
@@ -293,6 +346,7 @@ class BBDTrackerApp(ctk.CTk):
         
         config_data = {
             "experiment_name": self.entry_exp_name.get(),
+            "mode": self.mode_selector.get(), # NEW: Save Mode
             "weapon": self.cfg_weapon.get(),
             "ammo": self.cfg_ammo.get(),
             "ring": self.cfg_ring.get(),
@@ -363,15 +417,6 @@ class BBDTrackerApp(ctk.CTk):
         
         # 2. Add Current Session (Live Data)
         if self.is_active:
-            # We don't double count if session is saved, but session ID check is complex.
-            # Simpler: If active, exclude current session ID from disk load? 
-            # Actually, `save_data` overwrites the file. 
-            # So if we load from disk, we might load the current session if it was saved.
-            # BUT, we only save on STOP. So disk data is usually old.
-            # Let's assume disk = old, memory = new.
-            # NOTE: If you click "Stop & Save", it writes to disk. 
-            # If we then calculate, we might double count if we aren't careful.
-            # Fix: Only add self variables if session is NOT in the file list yet.
             if f"{self.session_id}.json" not in os.listdir(DATA_DIR):
                 total_kills += self.kill_count
                 for item, qty in self.loot_tracker.items():
