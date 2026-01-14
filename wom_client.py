@@ -79,25 +79,34 @@ class WiseOldManClient:
             self.log(f"EXCEPTION: {e}")
             return None
 
-    def get_player_snapshots(self, username, period="week"):
+        
+def get_player_snapshots(self, username, period=None, start_date=None, end_date=None):
         """
-        GET /players/:username/snapshots
-        UPDATE: Handles pagination to fetch ALL snapshots for the period.
+        Fetches snapshots. 
+        Supports 'period' (e.g., 'week') OR 'start_date'/'end_date' (ISO strings).
+        Handles pagination automatically to get ALL results for the criteria.
         """
         clean_username = username.strip()
         url = f"{self.base_url}/players/{clean_username}/snapshots"
         
         all_snapshots = []
         offset = 0
-        limit = 50 # Max allowed by API per request
+        limit = 50 
         
         try:
             while True:
                 params = {
-                    "period": period,
                     "limit": limit,
                     "offset": offset
                 }
+                
+                # Add conditional filters
+                if period:
+                    params["period"] = period
+                if start_date:
+                    params["startDate"] = start_date
+                if end_date:
+                    params["endDate"] = end_date
                 
                 response = requests.get(url, headers=self.headers, params=params)
                 data = self._handle_response(response, clean_username)
@@ -105,21 +114,18 @@ class WiseOldManClient:
                 if not data:
                     break
                 
-                # Add the fetched snapshots to our master list
                 all_snapshots.extend(data)
                 
-                # If we got fewer results than the limit, we have reached the end
                 if len(data) < limit:
                     break
                 
-                # Otherwise, move the offset forward to get the next page
                 offset += limit
-                
-                # Polite delay between pages to avoid rate limits during heavy fetches
-                time.sleep(0.5)
+                time.sleep(0.3) # Polite delay during heavy pagination
 
             return all_snapshots
 
         except Exception as e:
             self.log(f"EXCEPTION: {e}")
             return None
+
+  
