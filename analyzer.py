@@ -2,45 +2,102 @@
 import csv
 import os
 import time
-from datetime import datetime
+import sqlite3
+import json
+from datetime import datetime, timedelta, timezone
 import config
-from wom_client import WiseOldManClient
 
 # Ensure reports directory exists
 if not os.path.exists('reports'):
     os.makedirs('reports')
 
+DB_FILE = "wom_master.db"
+
 def parse_iso_date(date_str):
     """Parses WOM ISO dates (e.g., 2023-10-27T10:00:00.000Z)"""
-    return datetime.strptime(date_str.replace('Z', '+0000'), "%Y-%m-%dT%H:%M:%S.%f%z")
+    # Handle Z for UTC
+    if date_str.endswith('Z'):
+        date_str = date_str.replace('Z', '+0000')
+    return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S.%f%z")
 
-def fetch_all_data(client, period="week"):
+def fetch_local_data(period="week"):
     """
-    The Data Loader.
-    Fetches snapshots ONCE for every player and stores them in memory.
+    The New Data Loader.
+    Queries the local SQLite database for snapshots in the given period.
+    Respects config.PROJECT_START_DATE to ensure no legacy data is included.
     Returns: dict { 'Username': {'category': 'real_ones', 'snapshots': [...]} }
     """
-    print("--- 1. Fetching Data from Wise Old Man (This may take a moment) ---")
-    data_cache = {}
+    print(f"--- 1. Fetching Data from Local Archive ({period}) ---")
     
+    if not os.path.exists(DB_FILE):
+        print("Error: wom_master.db not found. Run 'datahub.py sync' first.")
+        return {}
+
+    # 1. Determine Period Start Date
+    now = datetime.now(timezone.utc)
+    if period == "week":
+        period_start = now - timedelta(weeks=1)
+    elif period == "month":
+        period_start = now - timedelta(days=30)
+    else:
+        period_start = now - timedelta(days=365*10) # Effectively forever
+
+    # 2. Determine Project Start Date (Global Filter)
+    try:
+        # Parse config date (e.g. "2026-01-04T00:00:00")
+        project_start = datetime.fromisoformat(config.PROJECT_START_DATE)
+        # Ensure it is timezone-aware (UTC) for comparison
+        if project_start.tzinfo is None:
+            project_start = project_start.replace(tzinfo=timezone.utc)
+    except Exception as e:
+        print(f"Warning: Could not parse PROJECT_START_DATE ({e}). Ignoring filter.")
+        project_start = period_start # Fallback
+
+    # 3. Use the LATER of the two dates (Stricter Filter)
+    effective_start_date = max(period_start, project_start)
+    print(f"Filter Date: {effective_start_date.strftime('%Y-%m-%d %H:%M')}")
+
+    data_cache = {}
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    # Get all players from config
     for category, players in config.PLAYER_LISTS.items():
         for username in players:
-            snapshots = client.get_player_snapshots(username, period)
+            # Query DB for snapshots newer than effective_start_date
+            query = """
+                SELECT data_json, timestamp 
+                FROM snapshots 
+                WHERE username = ? 
+                AND timestamp >= ? 
+                ORDER BY timestamp ASC
+            """
+            c.execute(query, (username, effective_start_date.isoformat()))
+            rows = c.fetchall()
             
-            if snapshots and len(snapshots) >= 2:
-                # Sort once here, so we don't have to do it in every report
-                snapshots.sort(key=lambda x: x['createdAt'])
+            snapshots = []
+            for row in rows:
+                try:
+                    # Reconstruct the snapshot object structure the analyzer expects
+                    snap_data = json.loads(row[0])
+                    snapshots.append({
+                        "createdAt": row[1],
+                        "data": snap_data
+                    })
+                except:
+                    continue
+
+            if len(snapshots) >= 2:
                 data_cache[username] = {
                     'category': category,
                     'snapshots': snapshots
                 }
-                print(f"Loaded {len(snapshots)} snapshots for {username}")
             else:
-                print(f"Insufficient data for {username}")
-            
-            # Polite delay between players
-            time.sleep(0.5)
-            
+                # print(f"Insufficient local data for {username}")
+                pass
+    
+    conn.close()
+    print(f"Loaded data for {len(data_cache)} players from database.")
     return data_cache
 
 def analyze_marginal_gains(data_cache, timestamp_suffix, period):
@@ -190,9 +247,6 @@ def generate_timeseries_data(data_cache, timestamp_suffix, period):
                 ])
 
 def analyze_detailed_xp_breakdown(data_cache, timestamp_suffix, period):
-    """
-    REQUIRED for the Stacked Bar Chart in visualizer.py
-    """
     filename = f"reports/detailed_xp_{period}_{timestamp_suffix}.csv"
     
     # Get skills from config colors to ensure order
@@ -223,20 +277,17 @@ def analyze_detailed_xp_breakdown(data_cache, timestamp_suffix, period):
             writer.writerow(row)
 
 def main():
-    client = WiseOldManClient()
     period = "week"
-    
-    # 1. Generate a single timestamp for all files in this batch
     timestamp_suffix = datetime.now().strftime('%Y%m%d_%H%M')
     
-    # 2. Fetch Data ONCE
-    data_cache = fetch_all_data(client, period)
+    # 1. Fetch Data from LOCAL DB (Instant)
+    data_cache = fetch_local_data(period)
     
     if not data_cache:
-        print("No data fetched. Exiting.")
+        print("No local data found. Please run 'datahub.py sync' first.")
         return
 
-    # 3. Run Analysis Suite (Memory based, instant)
+    # 2. Run Analysis Suite
     print("\n--- Processing Reports ---")
     analyze_marginal_gains(data_cache, timestamp_suffix, period)
     analyze_consistency_variety(data_cache, timestamp_suffix, period)

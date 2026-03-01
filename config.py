@@ -1,6 +1,9 @@
 # config.py
 import os
+import sqlite3
 from dotenv import load_dotenv
+
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -37,28 +40,73 @@ PROJECT_START_DATE = "2026-01-04T00:00:00"
 # PLAYER LISTS
 # ==========================================
 
-PLAYER_LISTS = {
+SEED_LISTS = {
     "real_ones": [
         "CashBaggins", 
         "CacheBaggins", 
         "BaboHouse", 
-        "BrutalBDMain", 
+        "CashDragons", 
         "BaboMouse", 
-        "Ez Purpp"
+        "Ez Purpp",
+        "Degener4te",
+        "Brutalx_ALT",
+        "Mandy Yew",
+        "slamincam",
+        "Thief GodMan",
+        "Pdawg 19",
+        "Superioritay",
+        
+        
+
     ],
     "suspected_bots": [
-        "BISKIEZ209", 
-        "frostytimez", 
         "xingyun 2025",
-        "Touroshui",
-        "geensliyh",
-        "gigidere",
-        "triunhiji",
+        "sharomprince",
+
                
     ],
     # You can add more lists easily here
     # "clan_mates": ["Name1", "Name2"],
 }
+
+
+# 2. DYNAMIC MERGE FROM CENSUS DATABASE
+# We create a new dictionary to hold the final results
+PLAYER_LISTS = {
+    "real_ones": list(SEED_LISTS["real_ones"]),
+    "suspected_bots": list(SEED_LISTS["suspected_bots"])
+}
+
+CENSUS_DB = "census.db"
+
+if os.path.exists(CENSUS_DB):
+    try:
+        # Open Read-Only connection to avoid locking the DB used by the UI
+        # uri=True allows us to specify mode=ro
+        conn = sqlite3.connect(f"file:{CENSUS_DB}?mode=ro", uri=True)
+        c = conn.cursor()
+        
+        # Fetch Real Ones from DB
+        c.execute("SELECT username FROM roster WHERE status = 'REAL'")
+        db_real = [row[0] for row in c.fetchall()]
+        
+        # Fetch Suspects from DB
+        c.execute("SELECT username FROM roster WHERE status = 'SUSPECT'")
+        db_suspects = [row[0] for row in c.fetchall()]
+        
+        conn.close()
+        
+        # Merge and Deduplicate (Set logic)
+        # We combine Seed + DB, then convert to set to remove duplicates, then back to list
+        PLAYER_LISTS["real_ones"] = list(set(PLAYER_LISTS["real_ones"] + db_real))
+        PLAYER_LISTS["suspected_bots"] = list(set(PLAYER_LISTS["suspected_bots"] + db_suspects))
+        
+        print(f"[CONFIG] Loaded Dynamic Lists. Real: {len(PLAYER_LISTS['real_ones'])}, Bots: {len(PLAYER_LISTS['suspected_bots'])}")
+
+    except Exception as e:
+        print(f"[CONFIG] Warning: Could not read census.db. Using seed lists only. Error: {e}")
+else:
+    print("[CONFIG] No census.db found. Using seed lists.")
 
 # ==========================================
 # DEDUCTION ENGINE (FILL IN THE BLANKS)
@@ -70,13 +118,14 @@ ACTIVITY_CONFIG = {
     # Configuration for the "suspected_bots" list
     "suspected_bots": {
         "primary_metric": "ranged",         # The skill they are likely training
-        "xp_per_hour": 79_380,               # Est. XP/hr for Brutal Black Dragons { BRUTAL-BLACK-DRAGON-HP * (EXP-PER-DAMAGE * BONUS-EXP-MOD) * KILLS-PER-HOUR }
-                                            # { 315 * (4 * 1.05) * 75 } = 99,225
-                                            # { 315 * (4 * 1.05) * 70 } = 92,610
-                                            # { 315 * (4 * 1.05) * 65 } = 85,995 
-                                            # { 315 * (4 * 1.05) * 60 } = 79,380 ** IN USE
-                                            # { 315 * (4 * 1.05) * 55 } = 72,765
-                                            # { 315 * (4 * 1.05) * 50 } = 66,150
+        "xp_per_hour": 85_995,               # Est. XP/hr for Brutal Black Dragons { BRUTAL-BLACK-DRAGON-HP * (EXP-PER-DAMAGE * BONUS-EXP-MOD) * KILLS-PER-HOUR }
+                                            # { 315 * (4 * 1.05) * 75 } = 99,225 RANGED EXP
+                                            # { 315 * (4 * 1.05) * 70 } = 92,610 RANGED EXP
+                                            # { 315 * (4 * 1.05) * 65 } = 85,995 RANGED EXP ** IN USE
+                                            # { 315 * (4 * 1.05) * 60 } = 79,380 RANGED EXP
+                                            # { 315 * (4 * 1.05) * 55 } = 72,765 RANGED EXP
+                                            # { 315 * (4 * 1.05) * 50 } = 66,150 RANGED EXP
+                                            # { 315 * (4 * 1.05) * 1} = 1,323 RANGED EXP
         "secondary_metric": "hitpoints",    # Secondary check
     },
     

@@ -16,7 +16,7 @@ REPORT_DIR = "reports"
 CSV_NAME = "time_tracking_history.csv"
 GOAL_HOURS_PER_DAY = 1.0
 THEME_COLOR = "green" 
-APP_SIZE = "1200x800"
+APP_SIZE = "1200x850" # Increased slightly for new fields
 
 # Ensure report directory exists
 if not os.path.exists(REPORT_DIR):
@@ -31,12 +31,26 @@ class DatabaseManager:
     def init_db(self):
         conn = sqlite3.connect(self.db_name)
         c = conn.cursor()
+        
+        # Create table if not exists (Original Schema)
         c.execute('''CREATE TABLE IF NOT EXISTS shifts
                      (id INTEGER PRIMARY KEY AUTOINCREMENT,
                       session_group_id TEXT, 
                       start_timestamp DATETIME,
                       end_timestamp DATETIME,
                       type TEXT)''')
+        
+        # --- MIGRATION: Add new columns if they don't exist ---
+        try:
+            c.execute("ALTER TABLE shifts ADD COLUMN activity TEXT")
+        except sqlite3.OperationalError:
+            pass # Column likely exists
+
+        try:
+            c.execute("ALTER TABLE shifts ADD COLUMN notes TEXT")
+        except sqlite3.OperationalError:
+            pass # Column likely exists
+
         conn.commit()
         conn.close()
 
@@ -44,7 +58,10 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_name)
         c = conn.cursor()
         c.execute(query, params)
-        data = c.fetchall()
+        if query.strip().upper().startswith("SELECT"):
+            data = c.fetchall()
+        else:
+            data = []
         conn.commit()
         conn.close()
         return data
@@ -64,6 +81,10 @@ class DatabaseManager:
             df['end_timestamp'] = pd.to_datetime(df['end_timestamp'])
             df['duration_hours'] = (df['end_timestamp'] - df['start_timestamp']).dt.total_seconds() / 3600
             
+            # Ensure new columns exist in dataframe (fills NaNs if empty)
+            if 'activity' not in df.columns: df['activity'] = ""
+            if 'notes' not in df.columns: df['notes'] = ""
+
             path = os.path.join(REPORT_DIR, CSV_NAME)
             df.to_csv(path, index=False)
             print(f"Data auto-exported to {path}")
@@ -97,47 +118,66 @@ class EditorFrame(ctk.CTkFrame):
             widget.destroy()
         self.rows = []
 
-        headers = ["ID", "Start Time (YYYY-MM-DD HH:MM:SS)", "End Time", "Type (WORK/BREAK)"]
+        # Updated Headers
+        headers = ["ID", "Start Time", "End Time", "Type", "Activity", "Notes"]
+        widths = [30, 160, 160, 80, 150, 200]
+        
         for i, h in enumerate(headers):
             ctk.CTkLabel(self.scroll, text=h, font=("Arial", 12, "bold")).grid(row=0, column=i, padx=5, pady=5, sticky="w")
 
-        data = self.db.run_query("SELECT id, start_timestamp, end_timestamp, type FROM shifts ORDER BY start_timestamp DESC LIMIT 50")
+        data = self.db.run_query("SELECT id, start_timestamp, end_timestamp, type, activity, notes FROM shifts ORDER BY start_timestamp DESC LIMIT 50")
 
-        for idx, (row_id, start, end, type_) in enumerate(data):
+        for idx, (row_id, start, end, type_, act, note) in enumerate(data):
             r = idx + 1
-            lbl_id = ctk.CTkLabel(self.scroll, text=str(row_id), width=30)
-            lbl_id.grid(row=r, column=0, padx=5)
+            
+            # ID
+            ctk.CTkLabel(self.scroll, text=str(row_id), width=widths[0]).grid(row=r, column=0, padx=2)
 
-            ent_start = ctk.CTkEntry(self.scroll, width=200)
+            # Start
+            ent_start = ctk.CTkEntry(self.scroll, width=widths[1])
             ent_start.insert(0, start)
-            ent_start.grid(row=r, column=1, padx=5, pady=2)
+            ent_start.grid(row=r, column=1, padx=2, pady=2)
 
-            ent_end = ctk.CTkEntry(self.scroll, width=200)
+            # End
+            ent_end = ctk.CTkEntry(self.scroll, width=widths[2])
             ent_end.insert(0, str(end) if end else "")
-            ent_end.grid(row=r, column=2, padx=5, pady=2)
+            ent_end.grid(row=r, column=2, padx=2, pady=2)
 
-            ent_type = ctk.CTkEntry(self.scroll, width=100)
+            # Type
+            ent_type = ctk.CTkEntry(self.scroll, width=widths[3])
             ent_type.insert(0, type_)
-            ent_type.grid(row=r, column=3, padx=5, pady=2)
+            ent_type.grid(row=r, column=3, padx=2, pady=2)
 
-            self.rows.append((row_id, ent_start, ent_end, ent_type))
+            # Activity
+            ent_act = ctk.CTkEntry(self.scroll, width=widths[4])
+            ent_act.insert(0, str(act) if act else "")
+            ent_act.grid(row=r, column=4, padx=2, pady=2)
+
+            # Notes
+            ent_note = ctk.CTkEntry(self.scroll, width=widths[5])
+            ent_note.insert(0, str(note) if note else "")
+            ent_note.grid(row=r, column=5, padx=2, pady=2)
+
+            self.rows.append((row_id, ent_start, ent_end, ent_type, ent_act, ent_note))
 
     def save_changes(self):
         try:
-            for row_id, e_start, e_end, e_type in self.rows:
+            for row_id, e_start, e_end, e_type, e_act, e_note in self.rows:
                 s_txt = e_start.get()
                 e_txt = e_end.get()
                 t_txt = e_type.get()
+                a_txt = e_act.get()
+                n_txt = e_note.get()
 
                 if s_txt: parser.parse(s_txt)
                 if e_txt and e_txt != "None": parser.parse(e_txt)
                 else: e_txt = None
 
-                self.db.run_query("UPDATE shifts SET start_timestamp=?, end_timestamp=?, type=? WHERE id=?", 
-                                  (s_txt, e_txt, t_txt, row_id))
+                self.db.run_query("UPDATE shifts SET start_timestamp=?, end_timestamp=?, type=?, activity=?, notes=? WHERE id=?", 
+                                  (s_txt, e_txt, t_txt, a_txt, n_txt, row_id))
             
             print("Saved successfully.")
-            self.db.export_to_csv() # Trigger Auto-Export
+            self.db.export_to_csv() 
             self.load_data()
         except Exception as e:
             tk.messagebox.showerror("Save Error", f"Could not save changes.\nCheck date formats.\nError: {e}")
@@ -176,7 +216,6 @@ class AnalysisFrame(ctk.CTkFrame):
         self.custom_frame = ctk.CTkFrame(self.ctrl_frame, fg_color="transparent")
         self.ent_custom_start = ctk.CTkEntry(self.custom_frame, placeholder_text="YYYY-MM-DD")
         self.ent_custom_start.pack(side="left", padx=5)
-        ctk.CTkLabel(self.custom_frame, text="to").pack(side="left")
         self.ent_custom_end = ctk.CTkEntry(self.custom_frame, placeholder_text="YYYY-MM-DD")
         self.ent_custom_end.pack(side="left", padx=5)
         self.btn_custom_go = ctk.CTkButton(self.custom_frame, text="Go", width=50, command=self.update_chart)
@@ -222,7 +261,6 @@ class AnalysisFrame(ctk.CTkFrame):
         if self.view_mode == "Week":
             delta = datetime.timedelta(weeks=1)
         elif self.view_mode == "Month":
-            # Rough month approximation for navigation
             delta = datetime.timedelta(days=30)
         elif self.view_mode == "3-Day":
             delta = datetime.timedelta(days=3)
@@ -248,18 +286,15 @@ class AnalysisFrame(ctk.CTkFrame):
             return self.current_date, self.current_date
         
         if self.view_mode == "3-Day":
-            # Current date and previous 2 days
             start = self.current_date - datetime.timedelta(days=2)
             return start, self.current_date
 
         if self.view_mode == "Week":
-            # Start Monday, End Sunday
             start = self.current_date - datetime.timedelta(days=self.current_date.weekday())
             end = start + datetime.timedelta(days=6)
             return start, end
 
         if self.view_mode == "Month":
-            # 1st to Last
             start = self.current_date.replace(day=1)
             next_month = start + relativedelta.relativedelta(months=1)
             end = next_month - datetime.timedelta(days=1)
@@ -373,32 +408,70 @@ class DashboardFrame(ctk.CTkFrame):
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1) 
-        self.grid_rowconfigure(4, weight=1) 
+        self.grid_rowconfigure(6, weight=1) 
 
         self.lbl_timer = ctk.CTkLabel(self, text="00:00:00", font=("Roboto Mono", 80, "bold"))
         self.lbl_timer.grid(row=1, column=0, pady=20)
 
         self.lbl_status = ctk.CTkLabel(self, text="Ready to Grind", font=("Arial", 20))
-        self.lbl_status.grid(row=2, column=0, pady=(0, 30))
+        self.lbl_status.grid(row=2, column=0, pady=(0, 20))
+
+        # --- NEW INPUTS ---
+        self.input_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.input_frame.grid(row=3, column=0, pady=10)
+
+        # Activity Field
+        self.lbl_act = ctk.CTkLabel(self.input_frame, text="Activity:", font=("Arial", 12))
+        self.lbl_act.grid(row=0, column=0, padx=5, sticky="e")
+        self.ent_activity = ctk.CTkEntry(self.input_frame, width=200, placeholder_text="Activity")
+        self.ent_activity.grid(row=0, column=1, padx=5)
+        self.ent_activity.insert(0, "Brutal Black Dragons") # Default
+
+        # Notes Field
+        self.lbl_note = ctk.CTkLabel(self.input_frame, text="Notes:", font=("Arial", 12))
+        self.lbl_note.grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.ent_notes = ctk.CTkEntry(self.input_frame, width=200, placeholder_text="Details...")
+        self.ent_notes.grid(row=1, column=1, padx=5, pady=5)
+
+        # --- Load Next Session ID into Notes ---
+        try:
+            with open("session_state.json", "r") as f:
+                state = json.load(f)
+                next_val = state.get("next_session", "")
+                # Only insert if notes are empty (don't overwrite active session data)
+                if not self.ent_notes.get(): 
+                    self.ent_notes.insert(0, f"Session {next_val}")
+        except Exception:
+            pass 
+        # -----------------------------------------------------
 
         self.btn_action = ctk.CTkButton(self, text="CLOCK IN", command=self.toggle_work, 
                                         height=80, width=300, font=("Arial", 24, "bold"), fg_color="green")
-        self.btn_action.grid(row=3, column=0, pady=10)
+        self.btn_action.grid(row=4, column=0, pady=20)
 
         self.btn_break = ctk.CTkButton(self, text="TAKE BREAK", command=self.toggle_break, 
                                        state="disabled", height=50, width=300, fg_color="#D4AF37", text_color="black")
-        self.btn_break.grid(row=4, column=0, pady=10)
+        self.btn_break.grid(row=5, column=0, pady=10)
 
         self.check_active_session()
         self.update_clock()
 
     def check_active_session(self):
-        res = self.db.run_query("SELECT session_group_id, start_timestamp, type FROM shifts WHERE end_timestamp IS NULL ORDER BY start_timestamp DESC LIMIT 1")
+        # We also want to load the activity/notes if a session is running!
+        res = self.db.run_query("SELECT session_group_id, start_timestamp, type, activity, notes FROM shifts WHERE end_timestamp IS NULL ORDER BY start_timestamp DESC LIMIT 1")
         if res:
-            self.current_session_id, start_str, type_ = res[0]
+            self.current_session_id, start_str, type_, act, note = res[0]
             self.start_time = parser.parse(start_str)
             self.is_working = True
             
+            # Load stored values back into UI
+            if act: 
+                self.ent_activity.delete(0, 'end')
+                self.ent_activity.insert(0, act)
+            if note:
+                self.ent_notes.delete(0, 'end')
+                self.ent_notes.insert(0, note)
+
             if type_ == 'BREAK':
                 self.on_break = True
                 self.set_ui_state("break")
@@ -433,43 +506,57 @@ class DashboardFrame(ctk.CTkFrame):
 
     def toggle_work(self):
         now = datetime.datetime.now()
+        
+        # Grab Input Values
+        act_txt = self.ent_activity.get()
+        note_txt = self.ent_notes.get()
+
         if not self.is_working:
+            # START
             self.is_working = True
             self.start_time = now
             self.current_session_id = f"SESSION_{int(now.timestamp())}"
-            self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type) VALUES (?, ?, ?)",
-                              (self.current_session_id, now, 'WORK'))
+            self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type, activity, notes) VALUES (?, ?, ?, ?, ?)",
+                              (self.current_session_id, now, 'WORK', act_txt, note_txt))
             self.set_ui_state("working")
-            self.db.export_to_csv() # Auto-Export
+            self.db.export_to_csv()
         else:
-            self.db.run_query("UPDATE shifts SET end_timestamp = ? WHERE session_group_id = ? AND end_timestamp IS NULL",
-                              (now, self.current_session_id))
+            # END
+            # We UPDATE activity/notes on end too, in case you changed them during the session
+            self.db.run_query("UPDATE shifts SET end_timestamp = ?, activity = ?, notes = ? WHERE session_group_id = ? AND end_timestamp IS NULL",
+                              (now, act_txt, note_txt, self.current_session_id))
             self.is_working = False
             self.on_break = False
             self.start_time = None
             self.set_ui_state("idle")
-            self.db.export_to_csv() # Auto-Export
+            self.db.export_to_csv()
             self.update_callback() 
 
     def toggle_break(self):
         now = datetime.datetime.now()
-        self.db.run_query("UPDATE shifts SET end_timestamp = ? WHERE session_group_id = ? AND end_timestamp IS NULL",
-                          (now, self.current_session_id))
+        act_txt = self.ent_activity.get()
+        note_txt = self.ent_notes.get()
+
+        # End current block (Update with text)
+        self.db.run_query("UPDATE shifts SET end_timestamp = ?, activity = ?, notes = ? WHERE session_group_id = ? AND end_timestamp IS NULL",
+                          (now, act_txt, note_txt, self.current_session_id))
         
         if not self.on_break:
-            self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type) VALUES (?, ?, ?)",
-                              (self.current_session_id, now, 'BREAK'))
+            # Start Break
+            self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type, activity, notes) VALUES (?, ?, ?, ?, ?)",
+                              (self.current_session_id, now, 'BREAK', act_txt, note_txt))
             self.on_break = True
             self.start_time = now
             self.set_ui_state("break")
         else:
-            self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type) VALUES (?, ?, ?)",
-                              (self.current_session_id, now, 'WORK'))
+            # Resume Work
+            self.db.run_query("INSERT INTO shifts (session_group_id, start_timestamp, type, activity, notes) VALUES (?, ?, ?, ?, ?)",
+                              (self.current_session_id, now, 'WORK', act_txt, note_txt))
             self.on_break = False
             self.start_time = now 
             self.set_ui_state("working")
         
-        self.db.export_to_csv() # Auto-Export
+        self.db.export_to_csv()
 
 
 # --- MAIN APP ---

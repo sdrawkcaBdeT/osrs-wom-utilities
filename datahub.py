@@ -3,40 +3,28 @@ OSRS DATAHUB (The Orchestrator)
 ================================
 
 This script acts as the central command center for the OSRS Bot Detective Suite.
-It coordinates the Engine, Archiver, Analyzer, and Visualizer.
 
 USAGE EXAMPLES:
 -------------------------------------------------------------------------
-1. Start the Tracker (Background Mode)
+1. ACTION MODE (When you sit down to play)
+   > python datahub.py play
+   * Launches BOTH the Time Tracker (tracker.py) and the BBD Lab (bbd_tracker.py).
+
+2. BACKGROUND MODE (Always running)
    > python datahub.py engine
-   * Launches main.py in a separate window to track players 24/7.
+   * Launches the WOM Updater (main.py) in the background.
 
-2. Generate Full Report (The "Video Ready" Command)
-   > python datahub.py report
-   * Step 1: Syncs Master Archive (Downloads all new history).
-   * Step 2: Analyzes data (Marginal gains, variety, activity logs).
-   * Step 3: Visualizes data (Generates PNG charts in /reports).
+3. REVIEW MODE (Generate all visualizations)
+   > python datahub.py charts
+   * Runs the FULL pipeline:
+     1. Syncs Master Archive (WOM History).
+     2. Analyzes WOM Data (Gains, Consistency, Suspects).
+     3. Generates WOM Charts (Gantt, Stacked Bar, Line).
+     4. Generates BBD Experiment Charts (Velocity, Phase, DPS).
 
-3. Generate Quick Report (Skip Archiving)
-   > python datahub.py report --quick
-   * Skips the slow archive sync. Useful if you just ran a sync recently
-     and want to regenerate charts with slightly different settings.
-
-4. Manual Archive Sync
-   > python datahub.py sync
-   * Only updates the local SQLite database with the latest WOM data.
+   > python datahub.py charts --quick
+   * Generates all charts but skips the slow Archive Sync step.
 -------------------------------------------------------------------------
-
-    python datahub.py engine -> Starts Tracking (Background).
-
-    python bbd_tracker.py -> Starts Lab (Foreground, when you play).
-
-    python tracker.py -> Starts Clock (Foreground, for accountability).
-
-    python datahub.py report -> Generates Macro Charts (WOM data).
-
-    python datahub.py bbd -> Generates Micro Charts (Kill Velocity).
-
 """
 
 import argparse
@@ -56,128 +44,130 @@ import bbd_visualizer
 def log(msg):
     print(f"[\033[96mDATAHUB\033[0m] {msg}")
 
-# --- COMMAND: START ENGINE ---
-def start_engine():
-    """
-    Launches main.py in a separate process.
-    On Windows, this opens a new window. On Mac/Linux, it runs in background.
-    """
-    log("Igniting the Engine (main.py)...")
+# --- HELPER: LAUNCH PROCESS ---
+def launch_process(script_name):
+    """Launches a python script in a detached process."""
     try:
-        # Use Popen to run it without blocking DataHub
         if sys.platform == "win32":
-            subprocess.Popen([sys.executable, "main.py"], creationflags=subprocess.CREATE_NEW_CONSOLE)
+            subprocess.Popen([sys.executable, script_name], creationflags=subprocess.CREATE_NEW_CONSOLE)
         else:
-            subprocess.Popen([sys.executable, "main.py"])
-        log("Engine started. It will run continuously in the background.")
+            subprocess.Popen([sys.executable, script_name])
+        log(f"Launched: {script_name}")
     except Exception as e:
-        print(f"Error starting engine: {e}")
+        print(f"Error launching {script_name}: {e}")
 
-# --- COMMAND: RUN PIPELINE ---
-def run_pipeline(skip_archive=False):
+# --- COMMAND: PLAY (Action Mode) ---
+def start_session_tools():
+    log("Initializing Session Tools...")
+    launch_process("tracker.py")      # The Clock
+    launch_process("bbd_tracker.py")  # The Lab
+
+# --- COMMAND: ENGINE (Background Mode) ---
+def start_engine():
+    log("Igniting the Engine...")
+    launch_process("main.py")         # The Updater
+
+# --- COMMAND: CHARTS (Review Mode) ---
+def run_full_suite(skip_archive=False):
     """
-    The 'One-Click' Report Generator.
-    1. Syncs Master Archive.
-    2. Runs Analyzer Suite.
-    3. Runs Visualizer Suite.
+    Runs every analysis tool available in the suite.
     """
     start_time = time.time()
     
-    # 1. ARCHIVE SYNC
+    # --- PART 1: WISE OLD MAN PIPELINE ---
+    log("=== STARTING WOM PIPELINE ===")
+    
+    # 1. Archive Sync
     if not skip_archive:
-        log("Step 1/3: Syncing Master Archive...")
+        log("Step 1/4: Syncing Master Archive...")
         try:
             archive = archiver.MasterArchive()
             archive.run_sync()
-            # Optional: Export master CSV every time?
-            # archive.export_master_csv() 
         except Exception as e:
             print(f"Archiver failed: {e}")
-            return
     else:
-        log("Step 1/3: Skipping Archive Sync.")
+        log("Step 1/4: Skipping Archive Sync.")
 
-    # 2. ANALYZE
-    log("Step 2/3: Running Analysis Suite...")
+    # 2. Analyze
+    log("Step 2/4: Running Analyzer...")
     try:
-        client = WiseOldManClient()
         timestamp_suffix = datetime.now().strftime('%Y%m%d_%H%M')
-        period = "week" # Default for reports
+        period = "week"
         
-        # Fetch Data (In-Memory)
-        # We use analyzer's logic to get the fresh snapshot cache
-        data_cache = analyzer.fetch_all_data(client, period)
+        # UPDATE: New function name, no client argument
+        data_cache = analyzer.fetch_local_data(period)
         
         if data_cache:
-            # Run all analysis functions directly (bypassing the menu)
             analyzer.analyze_marginal_gains(data_cache, timestamp_suffix, period)
             analyzer.analyze_consistency_variety(data_cache, timestamp_suffix, period)
             analyzer.estimate_activity_log(data_cache, timestamp_suffix, period)
             analyzer.generate_timeseries_data(data_cache, timestamp_suffix, period)
             analyzer.analyze_detailed_xp_breakdown(data_cache, timestamp_suffix, period)
         else:
-            print("Analysis Aborted: No data fetched.")
-            return
+            print("WOM Analysis Aborted: No data fetched.")
     except Exception as e:
         print(f"Analyzer failed: {e}")
-        return
 
-    # 3. VISUALIZE
-    log("Step 3/3: Generating Visuals...")
+    # 3. Visualize (WOM)
+    log("Step 3/4: Generating WOM Visuals...")
     try:
-        # Run all visualization functions directly
-        visualizer.draw_variety_chart()
-        visualizer.draw_activity_gantt()
-        visualizer.draw_faceted_cumulative_charts()
+        # UPDATE: New function names matching visualizer.py overhaul
+        visualizer.draw_variety_charts()       # Plural
+        visualizer.draw_heatmap_gantt()        # Renamed from activity_gantt
+        visualizer.draw_annotated_line_charts() # Renamed from faceted_cumulative
     except Exception as e:
-        print(f"Visualizer failed: {e}")
-        return
+        print(f"WOM Visualizer failed: {e}")
 
-    elapsed = time.time() - start_time
-    log(f"Pipeline Complete in {elapsed:.2f} seconds.")
-    log(f"Check the /reports folder for your content.")
-
-    # --- COMMAND: RUN BBD ANALYSIS ---
-def run_bbd_analysis():
-    log("Running BBD Micro-Analysis...")
+    # --- PART 2: BBD EXPERIMENT PIPELINE ---
+    log("=== STARTING BBD PIPELINE ===")
+    
+    # 4. Visualize (BBD)
+    log("Step 4/4: Generating BBD Experiment Visuals...")
     try:
         sessions = bbd_visualizer.load_sessions()
-        if not sessions:
-            log("No valid BBD sessions found in /bbd_data.")
-            return
-        
-        log(f"Found {len(sessions)} sessions. Generating charts...")
-        bbd_visualizer.draw_velocity_comparison(sessions)
-        log("BBD Analysis Complete.")
+        if sessions:
+            log(f"Found {len(sessions)} sessions.")
+            bbd_visualizer.draw_velocity_comparison(sessions)
+            bbd_visualizer.draw_phase_gantt(sessions)
+            bbd_visualizer.draw_kill_time_histogram(sessions)
+        else:
+            log("No BBD sessions found.")
     except Exception as e:
         print(f"BBD Visualizer failed: {e}")
+
+    elapsed = time.time() - start_time
+    log(f"FULL SUITE COMPLETE in {elapsed:.2f} seconds.")
+    log(f"All charts available in /reports")
 
 # --- CLI HANDLER ---
 def main():
     parser = argparse.ArgumentParser(description="OSRS Data Orchestrator")
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
+    # 1. Play
+    subparsers.add_parser('play', help='Launch Tracker + BBD Lab GUIs')
+
+    # 2. Engine
     subparsers.add_parser('engine', help='Start the continuous tracking engine')
     
-    parser_report = subparsers.add_parser('report', help='Run the WOM analysis pipeline')
-    parser_report.add_argument('--quick', action='store_true', help='Skip Archive Sync')
+    # 3. Charts
+    parser_charts = subparsers.add_parser('charts', help='Generate ALL reports and visualizations')
+    parser_charts.add_argument('--quick', action='store_true', help='Skip Archive Sync')
 
+    # 4. Sync (Utility)
     subparsers.add_parser('sync', help='Only run the WOM Archiver')
-    
-    # NEW COMMAND
-    subparsers.add_parser('bbd', help='Run the BBD Experiment Analysis')
 
     args = parser.parse_args()
 
-    if args.command == 'engine':
+    if args.command == 'play':
+        start_session_tools()
+    elif args.command == 'engine':
         start_engine()
-    elif args.command == 'report':
-        run_pipeline(skip_archive=args.quick)
+    elif args.command == 'charts':
+        run_full_suite(skip_archive=args.quick)
     elif args.command == 'sync':
         log("Running Manual Sync...")
         archiver.MasterArchive().run_sync()
-    elif args.command == 'bbd':
-        run_bbd_analysis()
     else:
         parser.print_help()
 

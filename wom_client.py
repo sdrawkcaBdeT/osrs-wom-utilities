@@ -79,8 +79,8 @@ class WiseOldManClient:
             self.log(f"EXCEPTION: {e}")
             return None
 
-        
-def get_player_snapshots(self, username, period=None, start_date=None, end_date=None):
+    # INDENTATION FIXED HERE
+    def get_player_snapshots(self, username, period=None, start_date=None, end_date=None):
         """
         Fetches snapshots. 
         Supports 'period' (e.g., 'week') OR 'start_date'/'end_date' (ISO strings).
@@ -127,5 +127,3 @@ def get_player_snapshots(self, username, period=None, start_date=None, end_date=
         except Exception as e:
             self.log(f"EXCEPTION: {e}")
             return None
-
-  

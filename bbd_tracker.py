@@ -7,6 +7,8 @@ import time
 import os
 from PIL import Image
 from scipy.stats import binom
+from census_manager import CensusManager 
+import pygame
 
 # --- CONFIG ---
 HOST = '127.0.0.1'
@@ -16,6 +18,23 @@ IMG_DIR = "item_images"
 
 if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
 if not os.path.exists(IMG_DIR): os.makedirs(IMG_DIR)
+
+# --- AUDIO SYSTEM SETUP ---
+try:
+    pygame.mixer.init()
+    # Update this path if needed!
+    SOUND_PATH = r"D:\AFK Adventures Part 4\assets_licensed audio\Sound Effects\kill_notification_lq.wav"
+    
+    if os.path.exists(SOUND_PATH):
+        kill_sound = pygame.mixer.Sound(SOUND_PATH)
+        kill_sound.set_volume(0.5) 
+        print(f"[AUDIO] Sound loaded successfully.")
+    else:
+        print(f"[AUDIO] ERROR: File not found at {SOUND_PATH}")
+        kill_sound = None
+except Exception as e:
+    print(f"[AUDIO] Failed to init mixer: {e}")
+    kill_sound = None
 
 # --- MASTER DROP TABLE ---
 DROP_TABLE = {
@@ -72,6 +91,13 @@ DROP_TABLE = {
     "Uncut emerald":       {"rate": 1/309, "qty": 1, "cat": "RDT"},
     "Uncut ruby":          {"rate": 1/618, "qty": 1, "cat": "RDT"},
     "Uncut diamond":       {"rate": 1/2473, "qty": 1, "cat": "RDT"},
+    "Nature talisman":     {"rate": 1/1638, "qty": 1, "cat": "RDT"},
+    "Rune battleaxe":      {"rate": 1/2731, "qty": 1, "cat": "RDT"},
+    "Rune 2h sword":       {"rate": 1/2731, "qty": 1, "cat": "RDT"},
+    "Rune sq shield":      {"rate": 1/4096, "qty": 1, "cat": "RDT"},
+    "Steel arrow":         {"rate": 1/4096, "qty": 150, "cat": "RDT"},
+    "Adamant javelin":     {"rate": 1/4096, "qty": 20, "cat": "RDT"},
+    "Dragonstone":         {"rate": 1/4096, "qty": 1, "cat": "RDT"},
     
     # Tertiary
     "Ensouled dragon head":{"rate": 1/20, "qty": 1, "cat": "Tertiary"},
@@ -99,7 +125,10 @@ ITEM_MAP = {
     19677: "Ancient shard", 19679: "Dark totem base", 19681: "Dark totem middle", 19683: "Dark totem top",
     995: "Coins",
     987: "Loop half of key", 985: "Tooth half of key", 2366: "Shield left half",
-    1623: "Uncut sapphire", 1621: "Uncut emerald", 1619: "Uncut ruby", 1617: "Uncut diamond"
+    1623: "Uncut sapphire", 1621: "Uncut emerald", 1619: "Uncut ruby", 1617: "Uncut diamond",
+    1462: "Nature talisman", 1373: "Rune battleaxe", 1319: "Rune 2h sword", 1185: "Rune sq shield", 886: "Steel arrow", 829: "Adamant javelin", 1615:"Dragonstone",
+
+
 }
 
 # --- FLASK SERVER ---
@@ -109,8 +138,19 @@ app_instance = None
 @server.route('/event', methods=['POST'])
 def handle_event():
     data = request.json
+    ev_type = data.get('event')
+    payload = data.get('payload')
+
+    # --- AUDIO TRIGGER ---
+    if ev_type == 'notification':
+        if payload.get('type') == 'kill':
+            if kill_sound:
+                # Play on a separate channel (conceptually) so it doesn't block Flask
+                kill_sound.play()
+                print("[AUDIO] Playing Kill Sound")
+    
     if app_instance:
-        app_instance.process_event(data.get('event'), data.get('payload'))
+        app_instance.process_event(ev_type, payload)
     return jsonify({"status": "ok"})
 
 def run_server():
@@ -145,12 +185,15 @@ class CollapsibleFrame(ctk.CTkFrame):
 class BBDTrackerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("BBD Laboratory v11 (Dashboard Mode)")
+        self.title("BBD Laboratory v12 (Census Fix)")
         self.geometry("1400x900")
         ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("green")
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        # --- INITIALIZE MANAGERS FIRST ---
+        self.census = CensusManager()
 
         # State
         self.is_active = False
@@ -161,6 +204,7 @@ class BBDTrackerApp(ctk.CTk):
         self.loot_tracker = {}
         self.session_id = None
         self.img_cache = {}
+        self.sighting_cache = {} 
 
         self.setup_ui()
         self.update_timer()
@@ -172,13 +216,13 @@ class BBDTrackerApp(ctk.CTk):
         self.grid_columnconfigure(1, weight=2) 
         self.grid_columnconfigure(2, weight=3) 
         self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=0)
 
-        # === LEFT PANEL (Container) ===
+        # === LEFT PANEL ===
         self.panel_left = ctk.CTkFrame(self)
         self.panel_left.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         self.panel_left.grid_columnconfigure(0, weight=1)
         
-        # 1. LIVE STATS (Pinned to Top)
         self.stats_container = ctk.CTkFrame(self.panel_left, fg_color="transparent")
         self.stats_container.pack(fill="x", padx=5, pady=10)
         
@@ -190,14 +234,22 @@ class BBDTrackerApp(ctk.CTk):
         self.create_stat_box(self.stats_container, "Dragons Killed", "0", "lbl_kills")
         self.create_stat_box(self.stats_container, "Est. Kills/Hr", "0.0", "lbl_kph")
 
-        ctk.CTkFrame(self.panel_left, height=2, fg_color="#333").pack(fill="x", pady=15) # Divider
+        ctk.CTkFrame(self.panel_left, height=2, fg_color="#333").pack(fill="x", pady=15) 
 
-        # 2. SESSION CONFIG (Scrollable Area)
         self.scroll_setup = ctk.CTkScrollableFrame(self.panel_left, fg_color="transparent", label_text="SESSION CONFIG")
         self.scroll_setup.pack(fill="both", expand=True)
 
-        # Name & Mode
         self.entry_exp_name = ctk.CTkEntry(self.scroll_setup, placeholder_text="Session Name (Optional)")
+        self.entry_exp_name.pack(fill="x", padx=5, pady=5)
+        
+        # --- Load Next Session ID ---
+        try:
+            with open("session_state.json", "r") as f:
+                state = json.load(f)
+                next_val = state.get("next_session", "")
+                self.entry_exp_name.insert(0, next_val)
+        except Exception:
+            pass # Fail silently if file doesn't exist
         self.entry_exp_name.pack(fill="x", padx=5, pady=5)
 
         ctk.CTkLabel(self.scroll_setup, text="Session Mode:", font=("Arial", 11)).pack(anchor="w", padx=5)
@@ -205,20 +257,29 @@ class BBDTrackerApp(ctk.CTk):
         self.mode_selector.set("Experimental")
         self.mode_selector.pack(fill="x", padx=5, pady=(0, 10))
 
-        # Collapsible Gear Setup
         self.gear_frame = CollapsibleFrame(self.scroll_setup, title="Gear & Loadout")
         self.gear_frame.pack(fill="x", padx=5, pady=5)
         
-        # Add dropdowns to the content frame of the collapsible widget
         gf = self.gear_frame.content_frame
-        self.cfg_ammo = self.create_dropdown(gf, "Ammo Slot", ["Diamond bolts (e)", "Diamond dragon bolts (e)", "Dragonstone bolts (e)", "Pearl dragon bolts (e)", "Emerald dragon bolts (e)", "Opal dragon bolts (e)"])
+        self.cfg_ammo = self.create_dropdown(gf, "Ammo Slot", ["Diamond bolts (e)", "Diamond dragon bolts (e)", "Dragonstone bolts (e)", "Pearl dragon bolts (e)", "Emerald dragon bolts (e)", "Opal dragon bolts (e)", "Amethyst Bolts", "Runite Bolts"])
         self.cfg_weapon = self.create_dropdown(gf, "Weapon", ["Dragon hunter crossbow", "Twisted bow", "Dragon crossbow","Rune crossbow"])
         self.cfg_ring = self.create_dropdown(gf, "Ring Slot", ["Ring of the gods (i)", "Archers ring (i)", "Venator Ring"])
         self.cfg_back = self.create_dropdown(gf, "Back Slot", ["Ranging cape (t)", "Ava's accumulator","Ava's assembler", "Dizana's Quiver"])
-        self.cfg_feet = self.create_dropdown(gf, "Feet Slot", ["Pegasian boots", "God d'hide boots", "Avernic treads (max)"])
+        self.cfg_feet = self.create_dropdown(gf, "Feet Slot", ["Pegasian boots", "God d'hide boots", "Avernic treads (max)", "Devout Boots"])
         self.cfg_pray = self.create_dropdown(gf, "Prayer Method", ["Rigour", "Eagle Eye", "Deadeye"])
         self.cfg_tele = self.create_dropdown(gf, "Teleport Method", ["Xeric's Talisman", "Book of Darkness"])
         self.cfg_bank = self.create_dropdown(gf, "Bank Method", ["Ring of dueling", "Crafting cape"])
+        # --- NEW: Bones Handling Method ---
+        self.cfg_bones = self.create_dropdown(gf, "Bones Method",[
+            "Bonecrusher necklace",
+            "Bury bones", 
+            "Pick up bones", 
+            "Sinister offering"
+        ])
+        self.cfg_pray_restore = self.create_dropdown(gf, "Prayer Restore Method",[
+            "Prayer Potions",
+            "Moonlight Moth"
+        ])
 
         # === CENTER PANEL ===
         self.panel_center = ctk.CTkFrame(self)
@@ -243,25 +304,145 @@ class BBDTrackerApp(ctk.CTk):
         self.panel_right_container = ctk.CTkFrame(self)
         self.panel_right_container.grid(row=0, column=2, sticky="nsew", padx=10, pady=10)
         
-        # Header with Refresh
         header = ctk.CTkFrame(self.panel_right_container, height=30, fg_color="transparent")
         header.pack(fill="x", padx=5, pady=5)
-        ctk.CTkLabel(header, text="LOOT ANALYSIS", font=("Arial", 16, "bold")).pack(side="left")
-        ctk.CTkButton(header, text="🔄 Refresh Stats", width=120, command=self.refresh_all_tables).pack(side="right")
+        ctk.CTkButton(header, text="🔄 Refresh All", width=120, command=self.refresh_all_tables).pack(side="right")
 
-        # Tabs
         self.tabs = ctk.CTkTabview(self.panel_right_container)
         self.tabs.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.tab_current = self.tabs.add("Current Session")
-        self.tab_all_time = self.tabs.add("All-Time")
+        self.tab_current = self.tabs.add("Loot (Current)")
+        self.tab_all_time = self.tabs.add("Loot (All-Time)")
+        self.tab_census = self.tabs.add("Census (Bots)")
 
-        # Scrollable Frames inside Tabs
         self.scroll_current = ctk.CTkScrollableFrame(self.tab_current)
         self.scroll_current.pack(fill="both", expand=True)
         
         self.scroll_all_time = ctk.CTkScrollableFrame(self.tab_all_time)
         self.scroll_all_time.pack(fill="both", expand=True)
+
+        self.setup_census_ui()
+        self.setup_bottom_bar()
+
+    # --- NEW AUDIO BAR FUNCTIONS ---
+    def setup_bottom_bar(self):
+        self.bar_frame = ctk.CTkFrame(self, height=50, fg_color="#1a1a1a", corner_radius=0)
+        self.bar_frame.grid(row=1, column=0, columnspan=3, sticky="ew")
+        
+        # Audio Container
+        ac = ctk.CTkFrame(self.bar_frame, fg_color="transparent")
+        ac.pack(side="left", padx=20, pady=10)
+        
+        self.btn_play_sound = ctk.CTkButton(ac, text="▶ Test Audio", width=100, command=self.test_audio, fg_color="#333", hover_color="#444")
+        self.btn_play_sound.pack(side="left", padx=10)
+        
+        ctk.CTkLabel(ac, text="Volume:", font=("Arial", 12)).pack(side="left", padx=(15, 5))
+        
+        self.vol_slider = ctk.CTkSlider(ac, from_=0, to=1, number_of_steps=20, width=150, command=self.set_volume)
+        self.vol_slider.set(0.5)
+        self.vol_slider.pack(side="left", padx=5)
+        
+        self.lbl_vol_pct = ctk.CTkLabel(ac, text="50%", font=("Arial", 12, "bold"), width=40)
+        self.lbl_vol_pct.pack(side="left", padx=5)
+        
+        # Status Indicator
+        status_text = "Audio Ready" if kill_sound else "Audio Error"
+        status_color = "gray" if kill_sound else "red"
+        ctk.CTkLabel(ac, text=f"({status_text})", text_color=status_color, font=("Arial", 10)).pack(side="left", padx=10)
+
+    def test_audio(self):
+        if kill_sound:
+            try:
+                kill_sound.play()
+            except: pass
+
+    def set_volume(self, value):
+        val = float(value)
+        self.lbl_vol_pct.configure(text=f"{int(val*100)}%")
+        if kill_sound:
+            kill_sound.set_volume(val)
+
+    # --- CENSUS UI ---
+    def setup_census_ui(self):
+        self.census_frame = ctk.CTkFrame(self.tab_census, fg_color="transparent")
+        self.census_frame.pack(fill="both", expand=True)
+
+        self.col_inbox = self.create_census_col(self.census_frame, "Detected (New)", 0)
+        self.col_suspect = self.create_census_col(self.census_frame, "Suspects", 1)
+        self.col_real = self.create_census_col(self.census_frame, "Real Ones", 2)
+        
+        self.refresh_census()
+
+    def create_census_col(self, parent, title, col):
+        frame = ctk.CTkFrame(parent)
+        frame.grid(row=0, column=col, sticky="nsew", padx=2, pady=5)
+        parent.grid_columnconfigure(col, weight=1)
+        
+        ctk.CTkLabel(frame, text=title, font=("Arial", 12, "bold")).pack(pady=5)
+        scroll = ctk.CTkScrollableFrame(frame)
+        scroll.pack(fill="both", expand=True, padx=2, pady=2)
+        return scroll
+
+    def refresh_census(self):
+        # Clear
+        for scroll in [self.col_inbox, self.col_suspect, self.col_real]:
+            for w in scroll.winfo_children(): w.destroy()
+
+        # --- FIX: Pass Session Start Time ---
+        # Only show "Inbox" items that have been seen SINCE we clicked Start Session.
+        # This keeps the inbox clean from yesterday's clutter.
+        if self.is_active and self.start_time:
+             session_start_dt = datetime.datetime.fromtimestamp(self.start_time)
+        else:
+             session_start_dt = None
+
+        inbox_data = self.census.get_inbox(session_start_time=session_start_dt)
+        for row in inbox_data:
+            self.create_player_card(self.col_inbox, row, is_inbox=True)
+
+        # Suspects/Real lists persist (we want to see them even if not seen today)
+        suspect_data = self.census.get_category("SUSPECT")
+        for row in suspect_data:
+            self.create_player_card(self.col_suspect, row, is_inbox=False)
+
+        real_data = self.census.get_category("REAL")
+        for row in real_data:
+            self.create_player_card(self.col_real, row, is_inbox=False)
+
+    def create_player_card(self, parent, row, is_inbox):
+        username, combat, sightings, last_seen, status, notes = row
+        
+        card = ctk.CTkFrame(parent, fg_color="#333")
+        card.pack(fill="x", pady=2, padx=2)
+        
+        # Format Time
+        try:
+            dt = datetime.datetime.fromisoformat(last_seen.split('.')[0])
+            time_str = dt.strftime("%H:%M") 
+        except:
+            time_str = "??"
+
+        ctk.CTkLabel(card, text=f"{username} (Lvl {combat})", font=("Arial", 11, "bold")).pack(anchor="w", padx=5)
+        ctk.CTkLabel(card, text=f"Seen: {sightings}x | {time_str}", font=("Arial", 10), text_color="gray").pack(anchor="w", padx=5)
+
+        btns = ctk.CTkFrame(card, fg_color="transparent", height=20)
+        btns.pack(fill="x", padx=2, pady=2)
+        
+        # --- FIXED LAMBDAS HERE ---
+        if is_inbox:
+            ctk.CTkButton(btns, text="BOT", width=30, height=20, fg_color="#b71c1c", 
+                          command=lambda u=username: self.move_player(u, "SUSPECT")).pack(side="left", padx=1)
+            ctk.CTkButton(btns, text="REAL", width=30, height=20, fg_color="#1b5e20", 
+                          command=lambda u=username: self.move_player(u, "REAL")).pack(side="left", padx=1)
+            ctk.CTkButton(btns, text="DEL", width=30, height=20, fg_color="#444", 
+                          command=lambda u=username: self.move_player(u, "TRASH")).pack(side="right", padx=1)
+        else:
+            ctk.CTkButton(btns, text="DEL", width=30, height=20, fg_color="#444", 
+                          command=lambda u=username: self.move_player(u, "TRASH")).pack(side="right", padx=1)
+
+    def move_player(self, username, new_status):
+        self.census.update_status(username, new_status)
+        self.refresh_census()
 
     # --- UI HELPERS ---
     def create_stat_box(self, parent, label, value, ref_name):
@@ -301,7 +482,12 @@ class BBDTrackerApp(ctk.CTk):
         self.loot_tracker = {}
         self.event_log = []
         self.session_id = f"session_{int(self.start_time)}"
+        self.sighting_cache = {} 
         
+        self.attack_count = 0
+        self.active_seconds_bank = 0.0
+        self.last_phase_timestamp = time.time()
+                
         self.btn_start.configure(state="disabled")
         self.btn_stop.configure(state="normal")
         self.btn_manual_kill.configure(state="normal", fg_color="#d32f2f")
@@ -310,7 +496,6 @@ class BBDTrackerApp(ctk.CTk):
         mode = self.mode_selector.get()
         self.log_event("session_start", f"Session Started ({mode})")
         
-        # Auto-collapse gear on start for cleaner view
         if self.gear_frame.is_expanded:
             self.gear_frame.toggle()
             
@@ -341,12 +526,20 @@ class BBDTrackerApp(ctk.CTk):
         self.log_box.see("end")
         self.event_log.append({"timestamp": ts_iso, "type": type_, "value": val})
 
-    def save_data(self):
+    def save_data(self, silent=False):
         if not self.session_id: return
         
+        # --- Calculate current active time if we are currently KILLING ---
+        current_active_bonus = 0.0
+        if self.current_phase == "KILLING":
+            current_active_bonus = time.time() - self.last_phase_timestamp
+            
+        total_active_seconds = self.active_seconds_bank + current_active_bonus
+        # ----------------------------------------------------------------------
+
         config_data = {
             "experiment_name": self.entry_exp_name.get(),
-            "mode": self.mode_selector.get(), # NEW: Save Mode
+            "mode": self.mode_selector.get(),
             "weapon": self.cfg_weapon.get(),
             "ammo": self.cfg_ammo.get(),
             "ring": self.cfg_ring.get(),
@@ -354,7 +547,10 @@ class BBDTrackerApp(ctk.CTk):
             "feet": self.cfg_feet.get(),
             "prayer": self.cfg_pray.get(),
             "tele": self.cfg_tele.get(),
-            "bank": self.cfg_bank.get()
+            "bank": self.cfg_bank.get(), 
+            # --- NEW FIELD ---
+            "bones": self.cfg_bones.get(),
+            "pray_restore": self.cfg_pray_restore.get(),
         }
 
         data = {
@@ -362,6 +558,8 @@ class BBDTrackerApp(ctk.CTk):
             "start_time": datetime.datetime.fromtimestamp(self.start_time).isoformat(),
             "end_time": self.get_iso_time(),
             "total_kills": self.kill_count,
+            "total_attacks": self.attack_count,        # <--- NEW
+            "active_seconds": total_active_seconds,    # <--- NEW
             "config": config_data,
             "loot_summary": self.loot_tracker,
             "event_timeline": self.event_log
@@ -369,7 +567,9 @@ class BBDTrackerApp(ctk.CTk):
         
         with open(f"{DATA_DIR}/{self.session_id}.json", 'w') as f:
             json.dump(data, f, indent=4)
-        self.log_event("system", "Data Saved Successfully.")
+            
+        if not silent:
+            self.log_event("system", "Data Saved Successfully.")
 
     def update_timer(self):
         if self.is_active and self.start_time:
@@ -395,27 +595,30 @@ class BBDTrackerApp(ctk.CTk):
         
         # 3. Render All-Time
         self.render_table(self.scroll_all_time, all_time_loot, all_time_kills, show_all=True)
+        
+        # 4. Refresh Census
+        self.refresh_census()
+
+        # --- LIVE AUTO-SAVE ---
+        if self.is_active:
+            self.save_data(silent=True)
 
     def calculate_all_time_stats(self):
         total_kills = 0
         total_loot = {}
 
-        # 1. Load from Disk
         for filename in os.listdir(DATA_DIR):
             if filename.endswith(".json"):
                 try:
                     with open(os.path.join(DATA_DIR, filename), 'r') as f:
                         data = json.load(f)
                         total_kills += data.get("total_kills", 0)
-                        
-                        # Merge loot
                         session_loot = data.get("loot_summary", {})
                         for item, qty in session_loot.items():
                             total_loot[item] = total_loot.get(item, 0) + qty
                 except:
                     pass
         
-        # 2. Add Current Session (Live Data)
         if self.is_active:
             if f"{self.session_id}.json" not in os.listdir(DATA_DIR):
                 total_kills += self.kill_count
@@ -431,15 +634,11 @@ class BBDTrackerApp(ctk.CTk):
         for i, h in enumerate(headers):
             ctk.CTkLabel(parent_frame, text=h, font=("Arial", 12, "bold")).grid(row=0, column=i, padx=5, pady=5, sticky="w")
 
-        # Determine items to show
         if show_all:
-            # Show everything in DROP_TABLE
             items_to_show = list(DROP_TABLE.keys())
         else:
-            # Only show what we have found (plus Uniques/Guaranteed for context)
             items_to_show = list(set(loot_data.keys()) | {k for k,v in DROP_TABLE.items() if v['cat'] in ['Guaranteed', 'Unique']})
 
-        # Sort
         sorted_items = sorted(items_to_show, key=lambda x: (DROP_TABLE.get(x, {}).get("cat", "Z") != "Unique", x))
 
         row_idx = 1
@@ -449,7 +648,6 @@ class BBDTrackerApp(ctk.CTk):
             rate = drop_info.get("rate", 0)
             avg_qty = drop_info.get("qty", 1)
             
-            # Skip if count is 0 and we are in "Current Session" mode (unless unique/guaranteed)
             if not show_all and actual == 0 and drop_info.get("cat") not in ["Unique", "Guaranteed"]: 
                 continue
 
@@ -473,7 +671,6 @@ class BBDTrackerApp(ctk.CTk):
                 luck_text = "100%"
                 luck_color = "#4caf50"
 
-            # Dim text if 0 found in All-Time view
             text_color = "white" if actual > 0 else "gray"
 
             img = self.load_image(name)
@@ -515,17 +712,47 @@ class BBDTrackerApp(ctk.CTk):
 
     def process_event(self, event_type, payload):
         if not self.is_active: return
+        
+        # --- NEW: Catch Attack ---
+        if event_type == "player_attack":
+            self.attack_count += 1
+            # Optional: I could save silently here, but saving on every shot 
+            # might be overkill. Saving on every kill/phase change is better.
 
-        if event_type == "phase_change":
+        elif event_type == "phase_change":
             in_zone = payload.get("in_zone")
             phase = "KILLING" if in_zone else "AWAY"
             if phase != self.current_phase:
+                
+                # --- Calculate elapsed time before switching phases ---
+                now = time.time()
+                if self.current_phase == "KILLING":
+                    self.active_seconds_bank += (now - self.last_phase_timestamp)
+                self.last_phase_timestamp = now
+                # -----------------------------------------------------------
+                
                 self.current_phase = phase
                 self.lbl_phase.configure(text=phase, text_color="#d32f2f" if in_zone else "gray")
                 self.log_event("phase", f"Phase Changed: {phase}")
-
+                self.save_data(silent=True) # Save quietly on phase change
+                
         elif event_type == "loot_event":
             self.process_kill(loot_items=payload.get("items", []))
+            
+        elif event_type == "player_spawn":
+            # --- CENSUS INTEGRATION ---
+            result = self.census.log_sighting(
+                self.session_id, 
+                payload['name'], 
+                payload['combat'], 
+                payload['world'], 
+                payload.get('gear', [])
+            )
+            
+            if result:
+                self.refresh_census()
+                if result['roster_status'] == 'NEW':
+                    self.log_event("census", f"New Player: {payload['name']}")
 
 if __name__ == "__main__":
     app = BBDTrackerApp()
