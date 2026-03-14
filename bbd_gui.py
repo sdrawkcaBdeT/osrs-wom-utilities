@@ -60,19 +60,47 @@ class BBDGUI:
         SIDE_ORIGIN_Y = 0        
 
         # --- WINDOW 1: NEXT SESSION ITERATOR ---
-        self.win_iterator = OverlayWindow(self.root, 200, 40, SIDE_ORIGIN_X + 875, SIDE_ORIGIN_Y + 5, "Iterator")
+        self.win_iterator = OverlayWindow(self.root, 100, 55, SIDE_ORIGIN_X + 875+103, SIDE_ORIGIN_Y + 2, "Iterator")
         
         # --- WINDOW 2: HISTORY ---
-        self.win_history = OverlayWindow(self.root, 400, 110, SIDE_ORIGIN_X + 5, SIDE_ORIGIN_Y + 5, "History")
+        self.win_history = OverlayWindow(self.root, 375, 105, SIDE_ORIGIN_X + 2, SIDE_ORIGIN_Y + 2, "History")
         
         # --- WINDOW 3: STATISTICS DASHBOARD ---
-        self.win_stats = OverlayWindow(self.root, 525, 120, SIDE_ORIGIN_X + 5, SIDE_ORIGIN_Y + 125, "Stats")
+        self.win_stats = OverlayWindow(self.root, 498, 105, SIDE_ORIGIN_X + 2, SIDE_ORIGIN_Y + 110, "Stats")
         
         # --- WINDOW 4: RNG TRACKER (Gross GP/D) ---
-        self.win_rng = OverlayWindow(self.root, 300, 50, SIDE_ORIGIN_X + 400 + 15, SIDE_ORIGIN_Y + 5, "RNG Tracker")
+        self.win_rng = OverlayWindow(self.root, 250, 50, SIDE_ORIGIN_X + 2, SIDE_ORIGIN_Y + 218, "RNG Tracker")
 
         # --- WINDOW 5: OPPORTUNITY COST (Min Slot Value) ---
-        self.win_opp = OverlayWindow(self.root, 135, 50, SIDE_ORIGIN_X + 400 + 15, SIDE_ORIGIN_Y + 65, "Opp Cost")
+        self.win_opp = OverlayWindow(self.root, 135, 50, SIDE_ORIGIN_X + 380, SIDE_ORIGIN_Y + 2, "Opp Cost")
+
+        # --- NEW WINDOWS (2x2 Grid) ---
+        # Starts 5px to the right of Opportunity Cost (415 + 135 + 5 = 555)
+        grid_x = SIDE_ORIGIN_X + 518  
+        grid_y = SIDE_ORIGIN_Y + 2
+
+        # Top-Left: Financial Statement (W: 240, H: 180)
+        self.win_fin_stmt = OverlayWindow(self.root, 206, 167, grid_x, grid_y, "Fin Stmt")
+        
+        # Top-Right: Time Log (W: 200, H: 85) -> 5px gap from Top-Left
+        self.win_time_log = OverlayWindow(self.root, 200, 74, grid_x + 210, grid_y, "Time Log")
+        
+        # Bottom-Left: Performance (W: 240, H: 75) -> 5px gap below Top-Left
+        self.win_perf = OverlayWindow(self.root, 206, 62, grid_x, grid_y + 170, "Performance")
+        
+        # Bottom-Right: Projections (W: 200, H: 95) -> 5px gap below Top-Right
+        self.win_proj = OverlayWindow(self.root, 200, 95, grid_x + 210, grid_y + 78, "Projections")
+        
+        # --- WINDOW 7: THE PROMPTER WAFFLE TRACKER ---
+        PROMPTER_X = -1930
+        PROMPTER_Y = -596
+        
+        # Sized exactly to the Elgato Prompter
+        self.win_waffle = OverlayWindow(self.root, 1024, 600, PROMPTER_X, PROMPTER_Y, "Waffle")
+
+        # --- NEW WINDOW 8: LIVE COMBAT TELEMETRY ---
+        # Sits directly below the 2x2 grid. Width: 415px (spanning both columns), Height: 120px
+        self.win_telemetry = OverlayWindow(self.root, 350, 95, grid_x + 210, grid_y + 176, "Combat Telemetry")
 
         # Initial Draw
         self.refresh_all()
@@ -110,6 +138,14 @@ class BBDGUI:
                     for row in csv.DictReader(f):
                         avg_low = int(row['avgLowPrice']) if row['avgLowPrice'] else 0
                         self.prices[int(row['item_id'])] = avg_low
+
+    def load_wealth_data(self):
+        if os.path.exists("live_wealth.json"):
+            try:
+                with open("live_wealth.json", 'r') as f:
+                    self.wealth_data = json.load(f)
+            except Exception as e:
+                pass
 
     def get_item_value(self, name):
         """Translates Name -> ID -> Wiki Price (Fallback to High Alch)"""
@@ -253,8 +289,12 @@ class BBDGUI:
     def draw_iterator(self):
         c = self.win_iterator.canvas
         c.delete("all")
+        
+        # Header on the top line
         self.draw_text(c, 10, 5, "NEXT SESSION:", HEADER_COLOR, FONT_BOLD)
-        c.create_text(120, 5, text=self.next_session_val, fill="#00FFFF", font=("Consolas", 18, "bold"), anchor="nw")
+        
+        # Number shifted down (y=22) and aligned to the left edge (x=10)
+        c.create_text(10, 22, text=self.next_session_val, fill="#00FFFF", font=("Consolas", 18, "bold"), anchor="nw")
 
     # --- DRAWING ---
     def draw_history(self):
@@ -413,6 +453,241 @@ class BBDGUI:
         val_txt = f"{net_gps:.1f} | {min_slot_val:,.0f}"
         c.create_text(10, 25, text=val_txt, fill="#FFD700", font=("Consolas", 12, "bold"), anchor="nw")
 
+    def draw_fin_stmt(self):
+        c = self.win_fin_stmt.canvas
+        c.delete("all")
+        if not self.wealth_data: return
+        w = self.wealth_data
+        y = 5
+        def fmt_m(val): return f"{int(val/1000000):,}M"
+        def fmt_delta(val): return f"{'+' if val > 0 else ''}{int(val/1000000):,}M"
+
+        self.draw_text(c, 10, y, "FINANCIAL STATEMENT", HEADER_COLOR, FONT_BOLD)
+        y += 15; c.create_line(10, y, 230, y, fill="gray"); y += 5
+        
+        self.draw_text(c, 10, y, f"{'Gear':<12} {fmt_m(w['gear']):>6} ({fmt_delta(w['gear_delta']):>5})")
+        y += 15
+        self.draw_text(c, 10, y, f"{'Supplies':<12} {fmt_m(w['supplies']):>6} ({fmt_delta(w['supplies_delta']):>5})")
+        y += 15
+        self.draw_text(c, 10, y, f"{'Drops':<12} {fmt_m(w['drops']):>6} ({fmt_delta(w['drops_delta']):>5})")
+        y += 15
+        self.draw_text(c, 10, y, f"{'GE / Cash':<12} {fmt_m(w['ge']):>6} ({fmt_delta(w['ge_delta']):>5})")
+        
+        y += 18; c.create_line(10, y, 230, y, fill="#333333"); y += 5
+        self.draw_text(c, 10, y, f"{'Subtotal':<12} {fmt_m(w['total']):>6} ({fmt_delta(w['total_delta']):>5})", "#00FFFF", FONT_BOLD)
+        
+        y += 20
+        self.draw_text(c, 10, y, f"{'Twisted Bow':<12} ({fmt_m(w['tbow_cost'])})", "#FF4444")
+        y += 18; c.create_line(10, y, 230, y, fill="#333333"); y += 5
+        self.draw_text(c, 10, y, f"{'Gap':<12} {fmt_m(w['gap']):>6}", "#FFD700", FONT_BOLD)
+        y += 15
+        self.draw_text(c, 10, y, f"{'Progress':<12} {w['progress_pct']:>6.1f} %", "#00FF00", FONT_BOLD)
+
+    def draw_time_log(self):
+        c = self.win_time_log.canvas
+        c.delete("all")
+        if not self.wealth_data: return
+        w = self.wealth_data
+        y = 5
+        self.draw_text(c, 10, y, "TIME LOG", HEADER_COLOR, FONT_BOLD)
+        y += 15; c.create_line(10, y, 190, y, fill="gray"); y += 5
+        self.draw_text(c, 10, y, f"{'Hrs Logged':<13} {w['hours_logged']:>8.2f}")
+        y += 15
+        self.draw_text(c, 10, y, f"{'Days Elapsed':<13} {int(w['days_elapsed']):>8}")
+        y += 15
+        self.draw_text(c, 10, y, f"{'Hours/Day':<13} {w['hours_per_day']:>8.2f}")
+
+    def draw_performance(self):
+        c = self.win_perf.canvas
+        c.delete("all")
+        if not self.wealth_data: return
+        w = self.wealth_data
+        y = 5
+        self.draw_text(c, 10, y, "PERFORMANCE", HEADER_COLOR, FONT_BOLD)
+        y += 15; c.create_line(10, y, 230, y, fill="gray"); y += 5
+        self.draw_text(c, 10, y, f"{'Net GP/hr':<14} {int(w['net_gp_hr']/1000):>7,} K")
+        y += 15
+        self.draw_text(c, 10, y, f"{'No-Gear GP/hr':<14} {int(w['no_gear_gp_hr']/1000):>7,} K")
+
+    def draw_projections(self):
+        c = self.win_proj.canvas
+        c.delete("all")
+        if not self.wealth_data: return
+        w = self.wealth_data
+        y = 5
+        self.draw_text(c, 10, y, "PROJECTIONS", HEADER_COLOR, FONT_BOLD)
+        y += 15; c.create_line(10, y, 190, y, fill="gray"); y += 5
+        self.draw_text(c, 10, y, f"{'Played Hrs Rem':<15} {int(w['played_hours_rem']):>6}")
+        y += 15
+        self.draw_text(c, 10, y, f"{'Real Days Rem':<15} {int(w['real_days_rem']):>6}")
+        y += 15
+        self.draw_text(c, 10, y, f"{'Completion ETA':<15} {w['eta_date']:>6}", "#00FFFF", FONT_BOLD)
+
+    def draw_waffle(self):
+        c = self.win_waffle.canvas
+        c.delete("all")
+        if not self.wealth_data: return
+        w = self.wealth_data
+
+        # Math: 9px box + 1px gap = 10px footprint. 
+        # 30 columns = 300px wide per waffle board.
+        box_size = 9
+        gap = 1
+        step = box_size + gap
+        cols = 30
+        rows = 40  # 1,200 max capacity
+
+        grave_fill, grave_out = "#111111", "#222222"
+
+        def render_grid(start_x, start_y, value, title, fill_c, out_c):
+            # 1. Draw Headers
+            self.draw_text(c, start_x, start_y, title, HEADER_COLOR, ("Consolas", 14, "bold"))
+            self.draw_text(c, start_x, start_y + 25, str(value), fill_c, ("Consolas", 14))
+
+            # 2. Draw Grid
+            grid_y_start = start_y + 60
+            full_boxes = int(value)
+            half_box = (value % 1) >= 0.5
+
+            for i in range(cols * rows):
+                r = i // cols
+                col = i % cols
+                x = start_x + (col * step)
+                y = grid_y_start + (r * step)
+
+                if i < full_boxes:
+                    c.create_rectangle(x, y, x + box_size, y + box_size, fill=fill_c, outline=out_c)
+                elif i == full_boxes and half_box:
+                    # Draw Left Half
+                    c.create_rectangle(x, y, x + (box_size//2), y + box_size, fill=fill_c, outline=out_c)
+                    # Draw Right Half (Graveyard)
+                    c.create_rectangle(x + (box_size//2), y, x + box_size, y + box_size, fill=grave_fill, outline=grave_out)
+                else:
+                    # Graveyard (Unlit LED)
+                    c.create_rectangle(x, y, x + box_size, y + box_size, fill=grave_fill, outline=grave_out)
+
+        # Draw the 3 distinct waffle boards, perfectly spaced for a 1024px screen
+        grid_start_y = 20
+        render_grid(20,  grid_start_y, round(w['hours_logged'],1), "HOURS LOGGED", "#00FF00", "#003300")
+        render_grid(360, grid_start_y, round(w['played_hours_rem'],1), "HOURS REMAINING", "#FFD700", "#332B00")
+        render_grid(700, grid_start_y, round(w['real_days_rem'],1), "DAYS REMAINING", "#00FFFF", "#003333")
+
+    def draw_telemetry(self):
+        import sqlite3
+        c = self.win_telemetry.canvas
+        c.delete("all")
+        
+        if not os.path.exists("combat_telemetry.db"):
+            self.draw_text(c, 10, 10, "Awaiting Combat Telemetry...", "gray")
+            return
+            
+        try:
+            conn = sqlite3.connect("combat_telemetry.db")
+            cur = conn.cursor()
+            
+            # Find the most recently logged session ID
+            cur.execute("SELECT session_id FROM hitsplats ORDER BY id DESC LIMIT 1")
+            res = cur.fetchone()
+            if not res:
+                self.draw_text(c, 10, 10, "No attacks logged yet.", "gray")
+                conn.close()
+                return
+                
+            latest_session = res[0]
+            
+            # Grab all damage values for this specific session
+            cur.execute("SELECT damage FROM hitsplats WHERE session_id = ?", (latest_session,))
+            hits = [row[0] for row in cur.fetchall()]
+            conn.close()
+            
+        except Exception as e:
+            self.draw_text(c, 10, 10, f"DB Error: {e}", "red")
+            return
+
+        if not hits:
+            self.draw_text(c, 10, 10, "No attacks logged in current session.", "gray")
+            return
+
+        # --- Calculate Metrics ---
+        bolts_fired = len(hits)
+        total_dmg = sum(hits)
+        
+        # Active DPS: Total Damage / (Bolts Fired * 3.0 seconds per attack)
+        actual_dps = total_dmg / (bolts_fired * 3.0) if bolts_fired > 0 else 0
+        
+        # --- Draw Text Headers ---
+        self.draw_text(c, 10, 5, "LIVE COMBAT TELEMETRY", HEADER_COLOR, ("Consolas", 10, "bold"))
+        c.create_line(10, 20, 340, 20, fill="gray")
+        
+        # Dropped "Miss%" and rebalanced the remaining text
+        self.draw_text(c, 10, 25, f"Bolts Fired: {bolts_fired:,}", TEXT_COLOR, ("Consolas", 9))
+        self.draw_text(c, 215, 25, f"Act DPS: {actual_dps:.2f}", "#00FFFF", ("Consolas", 9, "bold"))
+
+        # --- Calculate Histogram Bins ---
+        bins = [0] * 7
+        for h in hits:
+            if h == 0: bins[0] += 1
+            elif h <= 10: bins[1] += 1
+            elif h <= 20: bins[2] += 1
+            elif h <= 30: bins[3] += 1
+            elif h <= 40: bins[4] += 1
+            elif h <= 50: bins[5] += 1
+            else: bins[6] += 1
+            
+        max_bin = max(bins) if max(bins) > 0 else 1
+
+        # --- Draw Native Bar Chart ---
+        bar_w = 28   
+        gap = 12     
+        start_x = 45 
+        base_y = 80  
+        max_h = 35   
+        
+        labels =["0", "1-10", "11-20", "21-30", "31-40", "41-50", "51+"]
+        
+        # Colors: Pure White for 0, then a smooth grayscale gradient for the damage hits
+        colors =["#FFFFFF", "#444444", "#555555", "#666666", "#777777", "#888888", "#999999"]
+        
+        # Draw physical X and Y axis lines
+        c.create_line(start_x - 5, base_y, start_x + (bar_w + gap)*7, base_y, fill="#555555") 
+        c.create_line(start_x - 5, base_y, start_x - 5, base_y - max_h - 5, fill="#555555")   
+        
+        # Y-axis scale markers
+        c.create_text(start_x - 10, base_y - max_h, text=str(max_bin), fill="#888888", font=("Consolas", 7), anchor="e")
+        c.create_text(start_x - 10, base_y, text="0", fill="#888888", font=("Consolas", 7), anchor="e")
+        
+        for i in range(7):
+            h = (bins[i] / max_bin) * max_h
+            x = start_x + i * (bar_w + gap)
+            draw_h = h if h > 0 else 1 
+            
+            c.create_rectangle(x, base_y - draw_h, x + bar_w, base_y, fill=colors[i], outline="#222222")
+            
+            # --- PERCENTAGE ANNOTATIONS ---
+            pct = (bins[i] / bolts_fired) * 100 if bolts_fired > 0 else 0
+            
+            if pct >= 1:
+                pct_text = f"{pct:.0f}%"
+            elif pct > 0:
+                pct_text = "<1%"
+            else:
+                pct_text = ""
+                
+            if pct_text:
+                # If the bar is tall enough, put text inside it
+                if draw_h >= 10:
+                    t_y = base_y - (draw_h / 2)
+                    t_color = "black" if i == 0 else "white"
+                # If the bar is too short, float the text just above the bar in white
+                else:
+                    t_y = base_y - draw_h - 5
+                    t_color = "white"
+                    
+                c.create_text(x + (bar_w / 2), t_y, text=pct_text, fill=t_color, font=("Consolas", 7, "bold"), anchor="center")
+            
+            # X-Axis labels underneath the bars
+            c.create_text(x + (bar_w / 2), base_y + 8, text=labels[i], fill="#AAAAAA", font=("Consolas", 7), anchor="center")
+
     # --- ACTIONS ---
     def increment_session(self):
         try:
@@ -432,11 +707,22 @@ class BBDGUI:
     def refresh_all(self):
         self.load_items_and_prices()
         self.load_session_data()
+        self.load_wealth_data()
+
         self.draw_iterator()
         self.draw_history()
         self.draw_stats()
         self.draw_rng_tracker()
         self.draw_opportunity_cost()
+        
+        # --- NEW 2x2 GRID ---
+        self.draw_fin_stmt()
+        self.draw_time_log()
+        self.draw_performance()
+        self.draw_projections()
+        
+        self.draw_waffle()
+        self.draw_telemetry()
 
     def start_auto_refresh(self):
         self.root.after(5000, self.run_auto_refresh)

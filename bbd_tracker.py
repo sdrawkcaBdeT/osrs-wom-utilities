@@ -9,6 +9,7 @@ from PIL import Image
 from scipy.stats import binom
 from census_manager import CensusManager 
 import pygame
+import sqlite3
 
 # --- CONFIG ---
 HOST = '127.0.0.1'
@@ -106,8 +107,8 @@ DROP_TABLE = {
     "Draconic visage":     {"rate": 1/10000, "qty": 1, "cat": "Tertiary"},
     "Ancient shard":       {"rate": 1/123, "qty": 1, "cat": "Catacombs"},
     "Dark totem base":     {"rate": 1/185, "qty": 1, "cat": "Catacombs"},
-    "Dark Totem Middle":   {"rate": 1/185, "qty": 1, "cat": "Catacombs"},
-    "Dark Totem Top":      {"rate": 1/185, "qty": 1, "cat": "Catacombs"}
+    "Dark totem middle":   {"rate": 1/185, "qty": 1, "cat": "Catacombs"},
+    "Dark totem top":      {"rate": 1/185, "qty": 1, "cat": "Catacombs"}
 }
 
 # ID to Name Map
@@ -135,23 +136,72 @@ ITEM_MAP = {
 server = Flask(__name__)
 app_instance = None 
 
+LIVE_HP_STATE = {"current": 0, "max": 315, "active": False}
+
+def init_telemetry_db():
+    conn = sqlite3.connect('combat_telemetry.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS hitsplats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            timestamp DATETIME,
+            damage INTEGER,
+            dragon_hp_before INTEGER
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_telemetry_db()
+
 @server.route('/event', methods=['POST'])
 def handle_event():
+    global LIVE_HP_STATE
     data = request.json
     ev_type = data.get('event')
     payload = data.get('payload')
+
+    # --- NEW: COMBAT TELEMETRY INTERCEPT ---
+    if ev_type == 'combat_telemetry':
+        # Only log attacks if the GUI has an active session running!
+        if app_instance and app_instance.is_active and app_instance.session_id:
+            try:
+                conn = sqlite3.connect('combat_telemetry.db')
+                c = conn.cursor()
+                c.execute("""
+                    INSERT INTO hitsplats (session_id, timestamp, damage, dragon_hp_before) 
+                    VALUES (?, ?, ?, ?)
+                """, (
+                    app_instance.session_id, 
+                    datetime.datetime.now().isoformat(), 
+                    payload.get('damage', 0), 
+                    payload.get('hp_before', -1)
+                ))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"[TELEMETRY ERROR] SQLite insert failed: {e}")
+        return jsonify({"status": "logged"})
+
+    # --- HP UPDATE CATCH ---
+    if ev_type == 'hp_update':
+        LIVE_HP_STATE = payload
 
     # --- AUDIO TRIGGER ---
     if ev_type == 'notification':
         if payload.get('type') == 'kill':
             if kill_sound:
-                # Play on a separate channel (conceptually) so it doesn't block Flask
                 kill_sound.play()
                 print("[AUDIO] Playing Kill Sound")
     
     if app_instance:
         app_instance.process_event(ev_type, payload)
     return jsonify({"status": "ok"})
+
+@server.route('/hp', methods=['GET'])
+def get_hp():
+    return jsonify(LIVE_HP_STATE)
 
 def run_server():
     server.run(host=HOST, port=PORT, debug=False, use_reloader=False)
@@ -263,18 +313,19 @@ class BBDTrackerApp(ctk.CTk):
         gf = self.gear_frame.content_frame
         self.cfg_ammo = self.create_dropdown(gf, "Ammo Slot", ["Diamond bolts (e)", "Diamond dragon bolts (e)", "Dragonstone bolts (e)", "Pearl dragon bolts (e)", "Emerald dragon bolts (e)", "Opal dragon bolts (e)", "Amethyst Bolts", "Runite Bolts"])
         self.cfg_weapon = self.create_dropdown(gf, "Weapon", ["Dragon hunter crossbow", "Twisted bow", "Dragon crossbow","Rune crossbow"])
+        self.cfg_head = self.create_dropdown(gf, "Head",["Masori mask (f)", "Saradomin coif"])
+        self.cfg_body = self.create_dropdown(gf, "Body",["Masori body (f)", "Saradomin d'hide body"])
+        self.cfg_legs = self.create_dropdown(gf, "Legs",["Masori chaps (f)", "Saradomin chaps"])
+        self.cfg_hands = self.create_dropdown(gf, "Hands Slot", ["Zaryte vambraces", "God d'hide bracers"])
         self.cfg_ring = self.create_dropdown(gf, "Ring Slot", ["Ring of the gods (i)", "Archers ring (i)", "Venator Ring"])
         self.cfg_back = self.create_dropdown(gf, "Back Slot", ["Ranging cape (t)", "Ava's accumulator","Ava's assembler", "Dizana's Quiver"])
-        self.cfg_feet = self.create_dropdown(gf, "Feet Slot", ["Pegasian boots", "God d'hide boots", "Avernic treads (max)", "Devout Boots"])
+        self.cfg_feet = self.create_dropdown(gf, "Feet Slot", ["Pegasian boots", "God d'hide boots", "Devout Boots", "Avernic treads (max)"])
         self.cfg_pray = self.create_dropdown(gf, "Prayer Method", ["Rigour", "Eagle Eye", "Deadeye"])
         self.cfg_tele = self.create_dropdown(gf, "Teleport Method", ["Xeric's Talisman", "Book of Darkness"])
         self.cfg_bank = self.create_dropdown(gf, "Bank Method", ["Ring of dueling", "Crafting cape"])
-        # --- NEW: Bones Handling Method ---
         self.cfg_bones = self.create_dropdown(gf, "Bones Method",[
             "Bonecrusher necklace",
-            "Bury bones", 
-            "Pick up bones", 
-            "Sinister offering"
+            "Pick up bones"
         ])
         self.cfg_pray_restore = self.create_dropdown(gf, "Prayer Restore Method",[
             "Prayer Potions",
@@ -541,6 +592,10 @@ class BBDTrackerApp(ctk.CTk):
             "experiment_name": self.entry_exp_name.get(),
             "mode": self.mode_selector.get(),
             "weapon": self.cfg_weapon.get(),
+            "head": self.cfg_head.get(),
+            "body": self.cfg_body.get(),
+            "legs": self.cfg_legs.get(),
+            "hands": self.cfg_hands.get(),
             "ammo": self.cfg_ammo.get(),
             "ring": self.cfg_ring.get(),
             "back": self.cfg_back.get(),

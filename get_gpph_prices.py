@@ -13,11 +13,14 @@ def main():
     print("--- GP/Hour Price Fetcher (High Fidelity) ---")
     if not os.path.exists(SESSION_CSV): return print("No sessions file found. Run ingest first.")
 
-    # 1. Find needed timestamps
+    # 1. Find needed timestamps (Rounded to the 1-hour bucket)
     needed = set()
     with open(SESSION_CSV, 'r', encoding='utf-8') as f:
         for row in csv.DictReader(f):
-            if row['wiki_pricing_timestamp']: needed.add(int(row['wiki_pricing_timestamp']))
+            if row['wiki_pricing_timestamp']: 
+                exact_ts = int(row['wiki_pricing_timestamp'])
+                bucket_ts = exact_ts - (exact_ts % 3600)  # Round down to the hour
+                needed.add(bucket_ts)
 
     # 2. Check existing
     existing = {int(f.split('_')[1].split('.')[0]) for f in os.listdir(SNAPSHOT_DIR) if f.startswith("prices_")}

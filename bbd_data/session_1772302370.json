@@ -17,7 +17,11 @@
         "tele": "Xeric's Talisman",
         "bank": "Ring of dueling",
         "bones": "Pick up bones",
-        "pray_restore": "Prayer Potions"
+        "pray_restore": "Prayer Potions",
+        "hands": "Zaryte vambraces",
+        "head": "Masori mask (f)",
+        "body": "Masori body (f)",
+        "legs": "Masori chaps (f)"
     },
     "loot_summary": {
         "Dragon bones": 155,
