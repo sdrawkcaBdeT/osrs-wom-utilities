@@ -1,0 +1,971 @@
+{
+    "session_id": "session_1773551711",
+    "start_time": "2026-03-15T00:15:11.341071",
+    "end_time": "2026-03-15T01:19:11.505182",
+    "total_kills": 71,
+    "total_attacks": 1046,
+    "active_seconds": 3292.752789258957,
+    "config": {
+        "experiment_name": "0051",
+        "mode": "Experimental",
+        "weapon": "Dragon hunter crossbow",
+        "head": "Masori mask (f)",
+        "body": "Masori body (f)",
+        "legs": "Masori chaps (f)",
+        "hands": "Zaryte vambraces",
+        "ammo": "Runite Bolts",
+        "ring": "Ring of the gods (i)",
+        "back": "Ava's assembler",
+        "feet": "Pegasian boots",
+        "prayer": "Rigour",
+        "tele": "Xeric's Talisman",
+        "bank": "Ring of dueling",
+        "bones": "Pick up bones",
+        "pray_restore": "Prayer Potions"
+    },
+    "theoretical_stats": {
+        "max_hit": 58.0,
+        "exp_hit": 24.0,
+        "dps": 8.013,
+        "ttk": 41.7,
+        "accuracy": 82.85,
+        "rng_str": 142.0,
+        "rng_acc": 248.0,
+        "pray_bonus": 14.0
+    },
+    "loot_summary": {
+        "Dragon bones": 71,
+        "Black dragonhide": 142,
+        "Law rune": 225,
+        "Rune spear": 6,
+        "Soul rune": 150,
+        "Lava scale": 15,
+        "Runite ore": 3,
+        "Dragon spear": 1,
+        "Rune javelin": 300,
+        "Coins": 4850,
+        "Rune dart": 40,
+        "Anglerfish": 6,
+        "Dragon javelin tips": 40,
+        "Dragon arrowtips": 160,
+        "Death rune": 225,
+        "Rune platelegs": 7,
+        "Blood rune": 200,
+        "Dragon dart tip": 40,
+        "Black d'hide body": 2,
+        "Ensouled dragon head": 3,
+        "Rune longsword": 4,
+        "Rune arrow": 450,
+        "Rune thrownaxe": 60,
+        "Dragon med helm": 2,
+        "Dark totem middle": 1,
+        "Uncut ruby": 1
+    },
+    "event_timeline": [
+        {
+            "timestamp": "2026-03-15T00:15:11.346687",
+            "type": "session_start",
+            "value": "Session Started (Experimental)"
+        },
+        {
+            "timestamp": "2026-03-15T00:15:37.437075",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:16:40.196633",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:16:40.196633",
+            "type": "loot",
+            "value": "-> 75x Law rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:17:07.810670",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:17:07.810670",
+            "type": "loot",
+            "value": "-> 1x Rune spear"
+        },
+        {
+            "timestamp": "2026-03-15T00:18:01.814095",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:18:01.814095",
+            "type": "loot",
+            "value": "-> 1x Rune spear"
+        },
+        {
+            "timestamp": "2026-03-15T00:18:58.820257",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:18:58.820759",
+            "type": "loot",
+            "value": "-> 50x Soul rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:19:47.419361",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:19:47.419361",
+            "type": "loot",
+            "value": "-> 50x Soul rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:20:18.021743",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:20:18.022739",
+            "type": "loot",
+            "value": "-> 5x Lava scale"
+        },
+        {
+            "timestamp": "2026-03-15T00:21:12.040863",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:21:12.040863",
+            "type": "loot",
+            "value": "-> 3x Runite ore"
+        },
+        {
+            "timestamp": "2026-03-15T00:21:20.686311",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:22:02.074248",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:22:40.842783",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:22:40.843779",
+            "type": "loot",
+            "value": "-> 1x Dragon spear"
+        },
+        {
+            "timestamp": "2026-03-15T00:23:20.442015",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:23:20.442015",
+            "type": "loot",
+            "value": "-> 50x Rune javelin"
+        },
+        {
+            "timestamp": "2026-03-15T00:23:55.841385",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:23:55.842382",
+            "type": "loot",
+            "value": "-> 3000x Coins"
+        },
+        {
+            "timestamp": "2026-03-15T00:24:58.859704",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:24:58.859704",
+            "type": "loot",
+            "value": "-> 20x Rune dart"
+        },
+        {
+            "timestamp": "2026-03-15T00:25:43.855538",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:25:43.855538",
+            "type": "loot",
+            "value": "-> 1x Anglerfish"
+        },
+        {
+            "timestamp": "2026-03-15T00:25:43.855538",
+            "type": "loot",
+            "value": "-> 1x Anglerfish"
+        },
+        {
+            "timestamp": "2026-03-15T00:26:20.458749",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:26:20.458749",
+            "type": "loot",
+            "value": "-> 50x Rune javelin"
+        },
+        {
+            "timestamp": "2026-03-15T00:26:31.504008",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:27:08.675927",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:27:54.678370",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:27:54.678370",
+            "type": "loot",
+            "value": "-> 40x Dragon javelin tips"
+        },
+        {
+            "timestamp": "2026-03-15T00:28:34.922491",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:28:34.922491",
+            "type": "loot",
+            "value": "-> 40x Dragon arrowtips"
+        },
+        {
+            "timestamp": "2026-03-15T00:29:10.876603",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:29:10.877600",
+            "type": "loot",
+            "value": "-> 50x Rune javelin"
+        },
+        {
+            "timestamp": "2026-03-15T00:29:34.884943",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:29:34.886936",
+            "type": "loot",
+            "value": "-> 1x Rune spear"
+        },
+        {
+            "timestamp": "2026-03-15T00:29:59.499015",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:29:59.501190",
+            "type": "loot",
+            "value": "-> 75x Death rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:30:42.695588",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:30:42.696585",
+            "type": "loot",
+            "value": "-> 1x Rune spear"
+        },
+        {
+            "timestamp": "2026-03-15T00:30:56.089620",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:31:34.490670",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:32:07.298522",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:32:07.299511",
+            "type": "loot",
+            "value": "-> 40x Dragon arrowtips"
+        },
+        {
+            "timestamp": "2026-03-15T00:32:49.896968",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:32:49.896968",
+            "type": "loot",
+            "value": "-> 1x Rune platelegs"
+        },
+        {
+            "timestamp": "2026-03-15T00:33:49.318074",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:33:49.319071",
+            "type": "loot",
+            "value": "-> 50x Blood rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:34:28.314627",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:34:28.315623",
+            "type": "loot",
+            "value": "-> 370x Coins"
+        },
+        {
+            "timestamp": "2026-03-15T00:34:58.920644",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:34:58.921640",
+            "type": "loot",
+            "value": "-> 1x Rune platelegs"
+        },
+        {
+            "timestamp": "2026-03-15T00:35:34.942614",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:35:34.942614",
+            "type": "loot",
+            "value": "-> 40x Dragon dart tip"
+        },
+        {
+            "timestamp": "2026-03-15T00:36:25.943784",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:36:25.944771",
+            "type": "loot",
+            "value": "-> 1x Black d'hide body"
+        },
+        {
+            "timestamp": "2026-03-15T00:36:35.737081",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:37:15.956430",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:37:20.264596",
+            "type": "census",
+            "value": "New Player: WeThePeople"
+        },
+        {
+            "timestamp": "2026-03-15T00:37:22.038175",
+            "type": "census",
+            "value": "New Player: WeThePeople"
+        },
+        {
+            "timestamp": "2026-03-15T00:38:16.937191",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:38:16.941285",
+            "type": "loot",
+            "value": "-> 1x Rune platelegs"
+        },
+        {
+            "timestamp": "2026-03-15T00:38:39.134562",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:38:39.135559",
+            "type": "loot",
+            "value": "-> 50x Blood rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:39:30.158619",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:39:30.160612",
+            "type": "loot",
+            "value": "-> 1x Ensouled dragon head"
+        },
+        {
+            "timestamp": "2026-03-15T00:39:30.162605",
+            "type": "loot",
+            "value": "-> 1x Rune longsword"
+        },
+        {
+            "timestamp": "2026-03-15T00:40:18.753989",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:40:18.755325",
+            "type": "loot",
+            "value": "-> 50x Blood rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:41:03.140495",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:41:03.140495",
+            "type": "loot",
+            "value": "-> 75x Rune arrow"
+        },
+        {
+            "timestamp": "2026-03-15T00:41:29.756462",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:42:05.157465",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:42:50.555495",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:42:50.556492",
+            "type": "loot",
+            "value": "-> 370x Coins"
+        },
+        {
+            "timestamp": "2026-03-15T00:43:37.955601",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:43:37.956598",
+            "type": "loot",
+            "value": "-> 75x Rune arrow"
+        },
+        {
+            "timestamp": "2026-03-15T00:44:20.581247",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:44:20.583240",
+            "type": "loot",
+            "value": "-> 30x Rune thrownaxe"
+        },
+        {
+            "timestamp": "2026-03-15T00:44:37.579955",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:45:15.376723",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:45:51.783561",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:45:51.784557",
+            "type": "loot",
+            "value": "-> 30x Rune thrownaxe"
+        },
+        {
+            "timestamp": "2026-03-15T00:46:39.783564",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:46:39.786553",
+            "type": "loot",
+            "value": "-> 1x Rune spear"
+        },
+        {
+            "timestamp": "2026-03-15T00:47:24.778822",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:47:24.779819",
+            "type": "loot",
+            "value": "-> 370x Coins"
+        },
+        {
+            "timestamp": "2026-03-15T00:48:19.397316",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:48:19.398314",
+            "type": "loot",
+            "value": "-> 1x Dragon med helm"
+        },
+        {
+            "timestamp": "2026-03-15T00:48:28.014959",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:49:06.985974",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:50:07.997487",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:50:07.998484",
+            "type": "loot",
+            "value": "-> 40x Dragon arrowtips"
+        },
+        {
+            "timestamp": "2026-03-15T00:50:57.219563",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:50:57.220550",
+            "type": "loot",
+            "value": "-> 370x Coins"
+        },
+        {
+            "timestamp": "2026-03-15T00:51:47.616054",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:51:47.616054",
+            "type": "loot",
+            "value": "-> 1x Dark totem middle"
+        },
+        {
+            "timestamp": "2026-03-15T00:51:47.619561",
+            "type": "loot",
+            "value": "-> 1x Rune spear"
+        },
+        {
+            "timestamp": "2026-03-15T00:51:58.614056",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:52:35.835044",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:53:41.619599",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:53:41.620544",
+            "type": "loot",
+            "value": "-> 75x Law rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:54:36.240143",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:54:36.240143",
+            "type": "loot",
+            "value": "-> 5x Lava scale"
+        },
+        {
+            "timestamp": "2026-03-15T00:55:29.637347",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:55:29.638343",
+            "type": "loot",
+            "value": "-> 75x Rune arrow"
+        },
+        {
+            "timestamp": "2026-03-15T00:56:06.238004",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:56:06.242040",
+            "type": "loot",
+            "value": "-> 40x Dragon arrowtips"
+        },
+        {
+            "timestamp": "2026-03-15T00:56:41.636708",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:56:41.637704",
+            "type": "loot",
+            "value": "-> 50x Soul rune"
+        },
+        {
+            "timestamp": "2026-03-15T00:57:38.654247",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:57:38.655229",
+            "type": "loot",
+            "value": "-> 370x Coins"
+        },
+        {
+            "timestamp": "2026-03-15T00:57:46.878189",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T00:58:23.890467",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T00:59:12.254239",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T00:59:12.254239",
+            "type": "loot",
+            "value": "-> 1x Rune longsword"
+        },
+        {
+            "timestamp": "2026-03-15T01:00:00.862462",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:00:00.862462",
+            "type": "loot",
+            "value": "-> 20x Rune dart"
+        },
+        {
+            "timestamp": "2026-03-15T01:00:38.058456",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:00:38.059453",
+            "type": "loot",
+            "value": "-> 75x Rune arrow"
+        },
+        {
+            "timestamp": "2026-03-15T01:01:14.678495",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:01:14.678495",
+            "type": "loot",
+            "value": "-> 1x Black d'hide body"
+        },
+        {
+            "timestamp": "2026-03-15T01:01:49.479104",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:01:49.479104",
+            "type": "loot",
+            "value": "-> 1x Rune platelegs"
+        },
+        {
+            "timestamp": "2026-03-15T01:02:34.490090",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:02:34.491603",
+            "type": "loot",
+            "value": "-> 75x Rune arrow"
+        },
+        {
+            "timestamp": "2026-03-15T01:03:20.076529",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:03:20.076529",
+            "type": "loot",
+            "value": "-> 1x Ensouled dragon head"
+        },
+        {
+            "timestamp": "2026-03-15T01:03:20.079512",
+            "type": "loot",
+            "value": "-> 1x Rune platelegs"
+        },
+        {
+            "timestamp": "2026-03-15T01:03:32.876665",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T01:04:07.065402",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T01:04:51.877266",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:04:51.878262",
+            "type": "loot",
+            "value": "-> 5x Lava scale"
+        },
+        {
+            "timestamp": "2026-03-15T01:05:38.702318",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:05:38.702318",
+            "type": "loot",
+            "value": "-> 75x Death rune"
+        },
+        {
+            "timestamp": "2026-03-15T01:06:21.298094",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:06:21.299090",
+            "type": "loot",
+            "value": "-> 1x Uncut ruby"
+        },
+        {
+            "timestamp": "2026-03-15T01:07:09.902508",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:07:09.902508",
+            "type": "loot",
+            "value": "-> 1x Anglerfish"
+        },
+        {
+            "timestamp": "2026-03-15T01:07:09.904490",
+            "type": "loot",
+            "value": "-> 1x Anglerfish"
+        },
+        {
+            "timestamp": "2026-03-15T01:07:52.497839",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:07:52.498835",
+            "type": "loot",
+            "value": "-> 50x Rune javelin"
+        },
+        {
+            "timestamp": "2026-03-15T01:08:04.109395",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T01:08:44.313712",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T01:09:33.317770",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:09:33.317770",
+            "type": "loot",
+            "value": "-> 1x Anglerfish"
+        },
+        {
+            "timestamp": "2026-03-15T01:09:33.322375",
+            "type": "loot",
+            "value": "-> 1x Anglerfish"
+        },
+        {
+            "timestamp": "2026-03-15T01:10:17.715290",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:10:17.716286",
+            "type": "loot",
+            "value": "-> 1x Dragon med helm"
+        },
+        {
+            "timestamp": "2026-03-15T01:10:57.318755",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:10:57.319294",
+            "type": "loot",
+            "value": "-> 1x Rune longsword"
+        },
+        {
+            "timestamp": "2026-03-15T01:11:05.916864",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T01:11:42.527048",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T01:12:30.339371",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:12:30.339371",
+            "type": "loot",
+            "value": "-> 50x Rune javelin"
+        },
+        {
+            "timestamp": "2026-03-15T01:13:12.935012",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:13:12.935998",
+            "type": "loot",
+            "value": "-> 1x Ensouled dragon head"
+        },
+        {
+            "timestamp": "2026-03-15T01:13:12.938970",
+            "type": "loot",
+            "value": "-> 50x Rune javelin"
+        },
+        {
+            "timestamp": "2026-03-15T01:13:49.534143",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:13:49.535140",
+            "type": "loot",
+            "value": "-> 75x Law rune"
+        },
+        {
+            "timestamp": "2026-03-15T01:14:35.156663",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:14:35.157646",
+            "type": "loot",
+            "value": "-> 75x Death rune"
+        },
+        {
+            "timestamp": "2026-03-15T01:14:41.999229",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T01:15:15.547785",
+            "type": "phase",
+            "value": "Phase Changed: KILLING"
+        },
+        {
+            "timestamp": "2026-03-15T01:15:51.959685",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:15:51.960681",
+            "type": "loot",
+            "value": "-> 1x Rune platelegs"
+        },
+        {
+            "timestamp": "2026-03-15T01:16:18.957456",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:16:18.958453",
+            "type": "loot",
+            "value": "-> 75x Rune arrow"
+        },
+        {
+            "timestamp": "2026-03-15T01:16:56.759646",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:16:56.760642",
+            "type": "loot",
+            "value": "-> 1x Rune longsword"
+        },
+        {
+            "timestamp": "2026-03-15T01:17:30.377809",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:17:30.378804",
+            "type": "loot",
+            "value": "-> 1x Rune platelegs"
+        },
+        {
+            "timestamp": "2026-03-15T01:18:21.979205",
+            "type": "kill",
+            "value": "Kill Confirmed (Auto)"
+        },
+        {
+            "timestamp": "2026-03-15T01:18:21.980201",
+            "type": "loot",
+            "value": "-> 50x Blood rune"
+        },
+        {
+            "timestamp": "2026-03-15T01:18:38.381995",
+            "type": "phase",
+            "value": "Phase Changed: AWAY"
+        },
+        {
+            "timestamp": "2026-03-15T01:19:11.504555",
+            "type": "session_end",
+            "value": "Session Ended"
+        }
+    ]
+}

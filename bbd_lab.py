@@ -3,16 +3,23 @@ import pandas as pd
 import statsmodels.api as sm
 import numpy as np
 import itertools
+import plotly.graph_objects as go
+import streamlit_antd_components as sac
 
 st.set_page_config(page_title="BBD Laboratory", layout="wide", initial_sidebar_state="expanded")
+
+from sklearn.linear_model import LassoCV, BayesianRidge
 
 # --- CUSTOM CSS FOR THE DARK/NEON THEME ---
 st.markdown("""
     <style>
-    .stApp { background-color: #0A0A0A; color: #FFFFFF; }
-    .upgrade { color: #00FF00; font-weight: bold; }
-    .trap { color: #FF4444; font-weight: bold; }
-    .placebo { color: #888888; font-style: italic; }
+    /* Force Charcoal Backgrounds */
+    [data-testid="stAppViewContainer"] { background-color: #1E1E1E; }
+    [data-testid="stSidebar"] { background-color: #252526; }
+    [data-testid="stHeader"] { background-color: #1E1E1E; }
+    
+    /* Force Global Text Color for readability against dark background */
+    p, h1, h2, h3, h4, h5, h6, li, span, label, div { color: #CCCCCC; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -27,7 +34,6 @@ impute_missing = st.sidebar.checkbox(
     help="If checked, fills missing 'Missed Attacks' with the median so you don't lose old sessions. If unchecked, drops old sessions entirely."
 )
 
-@st.cache_data
 def load_data():
     try:
         df = pd.read_csv("normalized_sessions.csv")
@@ -84,6 +90,12 @@ if 'astb' in df.columns and 'miss_per_hr' in df.columns:
 else:
     missing_handling = 'none'
 
+# Add the RNG Delta variable if it exists in the dataset!
+if 'delta_kph' in df.columns:
+    cols_to_keep.append('delta_kph')
+    if impute_missing:
+        df['delta_kph'] = df['delta_kph'].fillna(0) # 0 means "average luck" relative to theoretical
+
 # --- 4. THE SYNERGY GENERATOR (Max Hit Breakpoints) ---
 # We only care about synergies between Weapon, Ammo, and Back slot. 
 ammo_cols =[c for c in cols_to_keep if c.startswith('config_ammo_')]
@@ -110,16 +122,62 @@ for i in range(len(interaction_groups)):
 
 cols_to_keep.extend(synergy_cols)
 
-# --- 5. RUN REGRESSION ---
-X = df[cols_to_keep].astype(float) 
-X = sm.add_constant(X) 
-y = df['t_ngp_hr'].astype(float)
+# --- 5. RUN REGRESSION & ML MODELS ---
+# Universal sanitizer: handles True/False strings, bracket-wrapped numbers, nans
+def _clean_col(series, fill_nan=0.0):
+    # 1. Convert to string and handle boolean words
+    s = series.astype(str).str.strip()
+    s = s.str.replace('True', '1', regex=False).str.replace('False', '0', regex=False)
+    
+    # 2. Aggressively strip EVERYTHING except digits, decimals, negatives, and scientific 'e/E'
+    s = s.str.replace(r'[^0-9\.\-eE]', '', regex=True)
+    
+    # 3. Safely coerce to numeric (errors='coerce' forces any surviving garbage to NaN)
+    return pd.to_numeric(s, errors='coerce').fillna(fill_nan)
 
 try:
-    model = sm.OLS(y, X, missing=missing_handling).fit()
+    for col in cols_to_keep:
+        df[col] = _clean_col(df[col])
+    
+    df['t_ngp_hr'] = _clean_col(df['t_ngp_hr'], fill_nan=float('nan'))
+    
+    X = df[cols_to_keep].astype(float)
+    X = sm.add_constant(X)
+    y = df['t_ngp_hr'].astype(float)
+
+    X_clean = X.dropna() if missing_handling == 'drop' else X.copy()
+    y_clean = y[X_clean.index]
+    
+    if len(X_clean) < 5:
+        raise ValueError(f"Only {len(X_clean)} valid sessions remain after dropping NaNs. Not enough to build ML models.")
+    
+    # 1. OLS (Baseline)
+    model = sm.OLS(y_clean, X_clean).fit(cov_type='HC3')
+    
+    # 2. Lasso
+    lasso_model = LassoCV(cv=5).fit(X_clean.drop(columns=['const']), y_clean)
+    
+    # 3. Bayesian Ridge
+    bayes_model = BayesianRidge().fit(X_clean.drop(columns=['const']), y_clean)
+    
 except Exception as e:
-    st.error(f"Regression failed. This usually happens if you lack enough data after unchecking 'Impute'. Error: {e}")
-    st.stop()
+    import traceback
+    st.error(f"Modeling failed: {e}\n\nTraceback:\n{traceback.format_exc()}")
+    print("FATAL MODELING ERROR:")
+    traceback.print_exc()
+    st.info("💡 **Tip:** Try checking 'Impute Missing Attack Data' in the sidebar to prevent older sessions from being dropped. You can still view the Wealth Tracker tab!")
+    
+    class DummyModel:
+        def __init__(self):
+            self.params = pd.Series({'const': 0})
+            self.pvalues = pd.Series({'const': 1})
+            self.coef_ = np.zeros(len(cols_to_keep))
+            
+    model = DummyModel()
+    lasso_model = DummyModel()
+    bayes_model = DummyModel()
+    y_clean = pd.Series()
+    X_clean = pd.DataFrame(columns=['const'] + cols_to_keep)
 
 # --- 6. PARSE RESULTS ROBUSTLY ---
 results =[]
@@ -140,6 +198,16 @@ for var in model.params.index:
             "Impact (GP/hr)": coef,
             "P-Value": p_val,
             "Verdict": "⚠️ COST OF SLOTH"
+        })
+        continue
+
+    # Handle the Combat RNG Metric
+    if var == 'delta_kph':
+        human_error_results.append({
+            "Item": "Lucky Combat (Δ KPH)",
+            "Impact (GP/hr)": coef,
+            "P-Value": p_val,
+            "Verdict": "🎲 COMBAT RNG"
         })
         continue
 
@@ -184,74 +252,211 @@ else:
     df_res = pd.DataFrame(columns=["Category", "Item", "Impact (GP/hr)", "P-Value", "Verdict"])
 
 # --- BUILD THE TABS ---
-tab1, tab2, tab3 = st.tabs(["The Verdict (MLR)", "Optimizer", "Experiment Matrix"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["The Verdict (MLR)", "Optimizer", "Experiment Matrix", "Wealth Tracker", "Visual Loadouts"])
+
+import base64
+from pathlib import Path
+
+def get_image_base64(item_name):
+    if not item_name or item_name.lower() in ['none', 'nan', 'unknown', '']: 
+        item_name = "placeholder"
+    clean_name = item_name.replace(' ', '_') + ".png"
+    filepath = Path("bbd_data/icons") / clean_name
+    if not filepath.exists():
+        filepath = Path("bbd_data/icons/placeholder.png")
+    try:
+        with open(filepath, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+        return f"data:image/png;base64,{encoded}"
+    except Exception:
+        return ""
+        
+def build_osrs_grid(equipment):
+    def get_slot_html(item_name, img_b64):
+        title = item_name if item_name and item_name not in ['Empty', 'placeholder'] else 'Empty'
+        return f"""<div style="height: 40px; width: 40px; position: relative;">
+<div style="display: flex; justify-content: center; align-items: center; height: 40px; width: 40px; background-color: #1a1a1a; border: 1px solid #333; border-radius: 4px;" title="{title}">
+<img src="{img_b64}" alt="{title}" style="max-width: 36px; max-height: 36px;">
+</div>
+</div>"""
+        
+    grid_html = f"""<div style="background-color: #252526; padding: 15px; border-radius: 8px; border: 1px solid #333; display: inline-block; width: max-content; margin-bottom: 20px;">
+<!-- Row 1: Head -->
+<div style="display: flex; justify-content: center;">
+{get_slot_html(equipment.get('head', ''), get_image_base64(equipment.get('head', '')))}
+</div>
+
+<!-- Row 2: Cape, Neck, Ammo -->
+<div style="display: flex; justify-content: center; gap: 8px; margin-top: 4px;">
+{get_slot_html(equipment.get('back', ''), get_image_base64(equipment.get('back', '')))}
+<div style="height: 40px; width: 40px;"></div>
+{get_slot_html(equipment.get('ammo', ''), get_image_base64(equipment.get('ammo', '')))}
+</div>
+
+<!-- Row 3: Weapon, Body, Shield -->
+<div style="display: flex; justify-content: center; gap: 24px; margin-top: 4px;">
+<div style="height: 40px; width: 40px;"></div>
+{get_slot_html(equipment.get('body', ''), get_image_base64(equipment.get('body', '')))}
+{get_slot_html(equipment.get('shield', ''), get_image_base64(equipment.get('shield', '')))}
+</div>
+
+<!-- Row 4: Legs -->
+<div style="display: flex; justify-content: center; margin-top: 4px;">
+{get_slot_html(equipment.get('legs', ''), get_image_base64(equipment.get('legs', '')))}
+</div>
+
+<!-- Row 5: Hands, Feet, Ring -->
+<div style="display: flex; justify-content: center; gap: 24px; margin-top: 4px;">
+{get_slot_html(equipment.get('hands', ''), get_image_base64(equipment.get('hands', '')))}
+{get_slot_html(equipment.get('feet', ''), get_image_base64(equipment.get('feet', '')))}
+{get_slot_html(equipment.get('ring', ''), get_image_base64(equipment.get('ring', '')))}
+</div>
+</div>"""
+    return grid_html
 
 with tab1:
     st.header("Gear Analysis Verdicts")
     st.markdown(f"**Baseline Setup:** `{', '.join(baseline_items.values())}`")
-    valid_sessions = len(y) if missing_handling == 'none' else len(y.dropna())
+    valid_sessions = len(y_clean)
     st.markdown(f"**Baseline Net GP/hr:** `{model.params['const']:,.0f} GP/hr` *(Sample: {valid_sessions} sessions)*")
     
-    st.markdown("---")
-    st.subheader("The Cost of Sloth (Human Error Variables)")
+    selected_model = sac.segmented(
+        items=[
+            sac.SegmentedItem(label='OLS (Baseline)', icon='calculator'),
+            sac.SegmentedItem(label='Bayesian Ridge', icon='box'),
+            sac.SegmentedItem(label='Lasso (Regularized)', icon='filter')
+        ], align='center', size='sm', color='green'
+    )
     
-    # Display Human Error Cards
-    if human_error_results:
-        cols_human = st.columns(2)
-        for i, row in enumerate(human_error_results):
-            with cols_human[i % 2]:
-                st.markdown(f"""
-                <div style='background-color: #330000; padding: 15px; border-radius: 5px; border: 1px solid #FF4444; margin-bottom: 20px;'>
-                    <h4 style='margin:0; color: #FFF;'>{row['Item']}</h4>
-                    <h2 style='margin:0; color: #FF4444;'>
-                        {row['Impact (GP/hr)']:+,.0f} GP/hr
-                    </h2>
-                    <p style='margin:0; color: #AAA;'>
-                        Every unit costs you this much. (p={row['P-Value']:.3f})
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-                
     st.markdown("---")
-    st.subheader("Gear Swaps")
     
-    # Display visually
-    if not df_res.empty:
-        cols = st.columns(3)
-        for i, row in df_res.iterrows():
-            with cols[i % 3]:
-                st.markdown(f"""
-                <div style='background-color: #111111; padding: 15px; border-radius: 5px; border: 1px solid #333; margin-bottom: 10px;'>
-                    <h4 style='margin:0; color: #FFF;'>{row['Item']}</h4>
-                    <h2 style='margin:0; color: {"#00FF00" if row["Impact (GP/hr)"] > 0 else "#FF4444"};'>
-                        {row['Impact (GP/hr)']:+,.0f} GP/hr
-                    </h2>
-                    <p style='margin:0; color: { "#888" if row["P-Value"] > 0.05 else "#FFF"};'>
-                        {row['Verdict']} (p={row['P-Value']:.3f})
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
-    else:
-        st.info("No alternative gear tested yet! You are only running the baseline.")
-
-    # Display Synergies
-    if synergy_results:
+    if selected_model == 'OLS (Baseline)':
+        st.subheader("The Cost of Sloth (Human Error Variables)")
+        
+        # Display Human Error Cards
+        if human_error_results:
+            cols_human = st.columns(2)
+            for i, row in enumerate(human_error_results):
+                with cols_human[i % 2]:
+                    st.markdown(f"""
+                    <div style='background-color: #252526; padding: 15px; border-radius: 5px; border: 1px solid #FF4444; margin-bottom: 20px; box-shadow: 0 0 15px rgba(255, 68, 68, 0.2);'>
+                        <h4 style='margin:0; color: #FFF;'>{row['Item']}</h4>
+                        <h2 style='margin:0; color: #FF4444;'>
+                            {row['Impact (GP/hr)']:+,.0f} GP/hr
+                        </h2>
+                        <p style='margin:0; color: #AAA;'>
+                            Every unit costs you this much. (p={row['P-Value']:.3f})
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
         st.markdown("---")
-        st.subheader("Weapon/Ammo Synergies (Max Hit Breakpoints)")
-        cols_syn = st.columns(2)
-        for i, row in enumerate(synergy_results):
-            with cols_syn[i % 2]:
-                st.markdown(f"""
-                <div style='background-color: #1a1a00; padding: 15px; border-radius: 5px; border: 1px solid #FFD700; margin-bottom: 10px;'>
-                    <h4 style='margin:0; color: #FFF;'>{row['Item']}</h4>
-                    <h2 style='margin:0; color: {"#FFD700" if row["Impact (GP/hr)"] > 0 else "#FF4444"};'>
-                        {row['Impact (GP/hr)']:+,.0f} GP/hr
-                    </h2>
-                    <p style='margin:0; color: { "#888" if row["P-Value"] > 0.10 else "#FFF"};'>
-                        {row['Verdict']} (p={row['P-Value']:.3f})
-                    </p>
-                </div>
-                """, unsafe_allow_html=True)
+        st.subheader("Gear Swaps")
+        
+        # Display visually
+        if not df_res.empty:
+            cols = st.columns(3)
+            for i, row in df_res.iterrows():
+                with cols[i % 3]:
+                    glow_color = "#00FF00" if row["Impact (GP/hr)"] > 0 else "#FF4444"
+                    st.markdown(f"""
+                    <div style='background-color: #252526; padding: 15px; border-radius: 5px; border: 1px solid {glow_color}; margin-bottom: 10px; box-shadow: 0 0 15px {glow_color}33;'>
+                        <h4 style='margin:0; color: #FFF;'>{row['Item']}</h4>
+                        <h2 style='margin:0; color: {glow_color};'>
+                            {row['Impact (GP/hr)']:+,.0f} GP/hr
+                        </h2>
+                        <p style='margin:0; color: { "#888" if row["P-Value"] > 0.05 else "#FFF"};'>
+                            {row['Verdict']} (p={row['P-Value']:.3f})
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("No alternative gear tested yet! You are only running the baseline.")
+
+        # Display Synergies
+        if synergy_results:
+            st.markdown("---")
+            st.subheader("Weapon/Ammo Synergies (Max Hit Breakpoints)")
+            cols_syn = st.columns(2)
+            for i, row in enumerate(synergy_results):
+                with cols_syn[i % 2]:
+                    glow_color = "#FFD700" if row["Impact (GP/hr)"] > 0 else "#FF4444"
+                    st.markdown(f"""
+                    <div style='background-color: #252526; padding: 15px; border-radius: 5px; border: 1px solid {glow_color}; margin-bottom: 10px; box-shadow: 0 0 15px {glow_color}33;'>
+                        <h4 style='margin:0; color: #FFF;'>{row['Item']}</h4>
+                        <h2 style='margin:0; color: {glow_color};'>
+                            {row['Impact (GP/hr)']:+,.0f} GP/hr
+                        </h2>
+                        <p style='margin:0; color: { "#888" if row["P-Value"] > 0.10 else "#FFF"};'>
+                            {row['Verdict']} (p={row['P-Value']:.3f})
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+    elif selected_model == 'Lasso (Regularized)':
+        st.subheader("Lasso Regression: Aggressive Signal Filtering")
+        st.write("Lasso applies an L1 penalty, forcing useless placebo gear to exactly 0 GP/hr. If it survives on this screen, it strongly matters.")
+        
+        lasso_features = X_clean.drop(columns=['const']).columns
+        lasso_cards = []
+        for idx, var in enumerate(lasso_features):
+            coef = lasso_model.coef_[idx]
+            if abs(coef) > 0.01:
+                item_name = var.split('_')[-1] if 'config_' in var else var
+                if var.startswith('SYN_'): item_name = var.replace("SYN_", "Combo: ")
+                if var in ['astb', 'miss_per_hr', 'delta_kph']: item_name = var.upper()
+                lasso_cards.append({"Item": item_name, "Impact": coef})
+                
+        if lasso_cards:
+            lasso_cards = sorted(lasso_cards, key=lambda x: x["Impact"], reverse=True)
+            cols = st.columns(3)
+            for i, card in enumerate(lasso_cards):
+                with cols[i % 3]:
+                    glow_color = "#00FF00" if card["Impact"] > 0 else "#FF4444"
+                    st.markdown(f"""
+                    <div style='background-color: #252526; padding: 15px; border-radius: 5px; border: 1px solid {glow_color}; margin-bottom: 10px; box-shadow: 0 0 15px {glow_color}33;'>
+                        <h4 style='margin:0; color: #FFF;'>{card['Item']}</h4>
+                        <h2 style='margin:0; color: {glow_color};'>
+                            {card['Impact']:+,.0f} GP/hr
+                        </h2>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("Lasso zeroed everything out! The variance is too high or impacts are too small.")
+
+    elif selected_model == 'Bayesian Ridge':
+        st.subheader("Bayesian Ridge: Probabilistic Limits")
+        st.write("Calculates coefficients using a probabilistic Bayesian approach rather than absolute least-squares.")
+        
+        bayes_features = X_clean.drop(columns=['const']).columns
+        bayes_cards = []
+        for idx, var in enumerate(bayes_features):
+            coef = bayes_model.coef_[idx]
+            # Filter negligible impacts
+            if abs(coef) > 5000:
+                item_name = var.split('_')[-1] if 'config_' in var else var
+                if var.startswith('SYN_'): item_name = var.replace("SYN_", "Combo: ")
+                if var in ['astb', 'miss_per_hr', 'delta_kph']: item_name = var.upper()
+                bayes_cards.append({"Item": item_name, "Impact": coef})
+                
+        if bayes_cards:
+            bayes_cards = sorted(bayes_cards, key=lambda x: x["Impact"], reverse=True)
+            cols = st.columns(3)
+            for i, card in enumerate(bayes_cards):
+                with cols[i % 3]:
+                    glow_color = "#00FF00" if card["Impact"] > 0 else "#FF4444"
+                    st.markdown(f"""
+                    <div style='background-color: #252526; padding: 15px; border-radius: 5px; border: 1px solid {glow_color}; margin-bottom: 10px; box-shadow: 0 0 15px {glow_color}33;'>
+                        <h4 style='margin:0; color: #FFF;'>{card['Item']}</h4>
+                        <h2 style='margin:0; color: {glow_color};'>
+                            {card['Impact']:+,.0f} GP/hr
+                        </h2>
+                    </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.info("Bayesian Ridge found no meaningful impacts given the extreme variance.")
+
+
 
 with tab2:
     st.header("Theoretical Maximum Setup")
@@ -415,3 +620,195 @@ with tab3:
         coverage['Total_Hours'] = coverage['Total_Hours'].apply(lambda x: f"{x:.1f}h")
         
         st.dataframe(coverage, use_container_width=True)
+
+with tab4:
+    st.header("Wealth Progress & Goals")
+    st.write("A high-level overview of our journey towards the Twisted Bow.")
+    
+    try:
+        df_wealth = pd.read_csv("wealth_history.csv")
+        df_wealth['timestamp'] = pd.to_datetime(df_wealth['timestamp'])
+        
+        # Resample to Daily (take the last record of each day)
+        df_wealth['date'] = df_wealth['timestamp'].dt.date
+        df_daily = df_wealth.groupby('date').last().reset_index()
+        
+        friendly_names = {
+            'total': 'Total Net Worth',
+            'gap': 'GP Needed for T-Bow',
+            'progress_pct': 'Twisted Bow Progress (%)',
+            'net_gp_hr': 'Overall Net GP/hr',
+            'no_gear_gp_hr': 'GP/hr (Ignoring Gear Price Fluctuations)',
+            'tbow_cost': 'Twisted Bow Price',
+            'played_hours_rem': 'Estimated Play Hours to Goal',
+            'real_days_rem': 'Estimated Real Days to Goal',
+            'gear': 'Active Gear Value',
+            'supplies': 'Banked Supplies Value',
+            'drops': 'Loot Tab Value',
+            'ge': 'Active GE Offers Value'
+        }
+        
+        sac_items = [sac.ChipItem(label=v) for v in friendly_names.values()]
+        
+        selected_metric_name = sac.chip(
+            items=sac_items,
+            index=0,
+            format_func='title',
+            radius='sm',
+            size='sm',
+            align='center',
+            variant='outline',
+            color='green',
+            multiple=False
+        )
+        
+        # Reverse lookup the column
+        selected_col = next(key for key, value in friendly_names.items() if value == selected_metric_name)
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=df_daily['date'], 
+            y=df_daily[selected_col],
+            mode='lines+markers',
+            line=dict(color='#00FF00', width=3),
+            marker=dict(size=6, color='#1E1E1E', line=dict(width=2, color='#00FF00')),
+            name=selected_metric_name
+        ))
+        
+        # Annotate logic: Label every 7th day (weekly), plus the very last point
+        annotations = []
+        
+        def format_val(val, col):
+            if 'pct' in col:
+                return f"{val:.1f}%"
+            elif 'rem' in col or 'hours' in col:
+                return f"{val:,.0f}"
+            else:
+                if val >= 1000000:
+                    return f"{val/1000000:.1f}M"
+                elif val >= 1000:
+                    return f"{val/1000:.1f}k"
+                else:
+                    return f"{val:,.0f}"
+        
+        for i in range(0, len(df_daily), 7):
+            val = df_daily[selected_col].iloc[i]
+            date_str = df_daily['date'].iloc[i]
+            text_val = format_val(val, selected_col)
+                    
+            annotations.append(
+                dict(
+                    x=date_str,
+                    y=val,
+                    text=text_val,
+                    showarrow=False,
+                    yshift=15,
+                    font=dict(color="#AAAAAA", size=10)
+                )
+            )
+            
+        # Always ensure the strict LAST point is heavily annotated
+        last_val = df_daily[selected_col].iloc[-1]
+        last_date = df_daily['date'].iloc[-1]
+        last_text = format_val(last_val, selected_col)
+                
+        annotations.append(
+            dict(
+                x=last_date,
+                y=last_val,
+                text=f"<b>CURRENT:<br>{last_text}</b>",
+                showarrow=True,
+                arrowcolor="#00FF00",
+                arrowhead=2,
+                arrowsize=1,
+                arrowwidth=2,
+                ax=0,
+                ay=-40,
+                font=dict(color="#00FF00", size=14)
+            )
+        )
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="#1E1E1E",
+            plot_bgcolor="#1E1E1E",
+            annotations=annotations,
+            margin=dict(l=20, r=20, t=40, b=20),
+            xaxis=dict(showgrid=True, gridcolor="#222222", title=""),
+            yaxis=dict(showgrid=True, gridcolor="#222222", title="")
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error loading wealth history: {e}")
+
+with tab5:
+    st.header("Tested Gear Setups (Worn Equipment)")
+    st.write("Visual breakdown of all unique loadouts deployed in your dataset.")
+    
+    import glob
+    import json
+    
+    @st.cache_data
+    def load_raw_json_loadouts():
+        loadouts = {}
+        json_files = glob.glob("bbd_data/session_*.json")
+        for f in json_files:
+            try:
+                with open(f, 'r', encoding='utf-8') as file:
+                    data = json.load(file)
+                
+                config = data.get('config', {})
+                duration_ms = data.get('session_time_ms', 0)
+                duration_hrs = duration_ms / 3600000.0 if duration_ms > 0 else 0.0
+                
+                eq = {}
+                params = []
+                
+                for key, val in config.items():
+                    if key in ['experiment_name', 'mode']: continue
+                    if not val or str(val).lower() in ['nan', 'none', 'unknown', '']: continue
+                    
+                    if key in ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'feet', 'ring', 'back']:
+                        actual_slot = 'back' if key == 'cape' else key
+                        eq[actual_slot] = val
+                    elif key == 'bones' and val == 'Bonecrusher necklace':
+                        eq['neck'] = val
+                    else:
+                        opt_name = key.replace('_', ' ').capitalize()
+                        params.append(f"{opt_name}: {val}")
+                        
+                sig = str(eq) + str(sorted(params))
+                if sig not in loadouts:
+                    loadouts[sig] = {
+                        'equipment': eq,
+                        'params': params,
+                        'sessions': 1,
+                        'hours': duration_hrs
+                    }
+                else:
+                    loadouts[sig]['sessions'] += 1
+                    loadouts[sig]['hours'] += duration_hrs
+            except Exception as e:
+                pass
+        return sorted(list(loadouts.values()), key=lambda x: x['sessions'], reverse=True)
+        
+    sorted_loadouts = load_raw_json_loadouts()
+    
+    for l in sorted_loadouts:
+        st.markdown("---")
+        colA, colB = st.columns([1, 2])
+        
+        with colA:
+            st.markdown(build_osrs_grid(l['equipment']), unsafe_allow_html=True)
+            
+        with colB:
+            st.subheader(f"Tested {l['sessions']} times ({l['hours']:.1f} hours)")
+            if l['params']:
+                st.markdown("**Non-Gear Configurations:**")
+                for p in l['params']:
+                    st.markdown(f"- {p}")
+            else:
+                st.markdown("*No additional configuration parameters logged for this setup.*")

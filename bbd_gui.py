@@ -5,6 +5,8 @@ import glob
 import csv
 from datetime import datetime, timedelta
 import keyboard
+import requests
+import time
 
 # Safely import the drop table so we can calculate theoreticals
 try:
@@ -102,6 +104,15 @@ class BBDGUI:
         # Sits directly below the 2x2 grid. Width: 415px (spanning both columns), Height: 120px
         self.win_telemetry = OverlayWindow(self.root, 350, 95, grid_x + 210, grid_y + 176, "Combat Telemetry")
 
+        # --- WINDOW 9: LIVE TICK MATRIX ---
+        # Starts 4px to the right of the RNG Tracker window (which is 250px wide) at x + 2 + 250 + 4
+        self.win_ticks = OverlayWindow(self.root, 258, 62, SIDE_ORIGIN_X + 256, SIDE_ORIGIN_Y + 218, "Tick Visualizer")
+        
+        self.tick_history = []
+        self.last_tick_ts = time.time()
+        self.sync_attack_ts = 0.0
+        self.ticks_since_attack = 0
+        
         # Initial Draw
         self.refresh_all()
 
@@ -112,7 +123,62 @@ class BBDGUI:
         keyboard.add_hotkey("ctrl+q", self.close_app)
 
         self.start_auto_refresh()
+        self.start_tick_loop()
         self.root.mainloop()
+
+    # --- TICK POLL LOOP ---
+    def start_tick_loop(self):
+        self.root.after(50, self.run_tick_loop)
+
+    def run_tick_loop(self):
+        now = time.time()
+        
+        try:
+            resp = requests.get("http://127.0.0.1:5000/hp", timeout=0.05)
+            data = resp.json()
+            server_phase = data.get("phase", "IDLE")
+            server_attack_ts = data.get("last_attack", 0.0)
+        except Exception:
+            server_phase = "IDLE"
+            server_attack_ts = 0.0
+
+        if server_attack_ts > self.sync_attack_ts:
+            self.sync_attack_ts = server_attack_ts
+            self.last_tick_ts = now 
+            self.push_tick(True, server_phase)
+        
+        elif now - self.last_tick_ts >= 0.600:
+            self.last_tick_ts += 0.600
+            if now - self.last_tick_ts >= 0.600:
+                self.last_tick_ts = now
+            self.push_tick(False, server_phase)
+            
+        self.root.after(50, self.run_tick_loop)
+
+    def push_tick(self, is_attack, phase):
+        if phase != "KILLING":
+            self.ticks_since_attack = 0
+            
+        if is_attack:
+            self.ticks_since_attack = 0
+            color = "#00FFFF" # Cyan for the initial shot to make it stand out
+        else:
+            self.ticks_since_attack += 1
+            if phase == "KILLING":
+                if self.ticks_since_attack < 5:
+                    color = "#00FF00" 
+                else:
+                    color = "#FF0000" 
+            elif phase in ["AWAY", "IDLE"]:
+                color = "#FFFF00"
+            else:
+                color = "#444444"
+
+        self.tick_history.insert(0, {"color": color, "is_attack": is_attack})
+        if len(self.tick_history) > 217:
+            self.tick_history = self.tick_history[:217]
+            
+        self.draw_ticks()
 
     # --- DATA PIPELINE ---
     def load_items_and_prices(self):
@@ -138,6 +204,11 @@ class BBDGUI:
                     for row in csv.DictReader(f):
                         avg_low = int(row['avgLowPrice']) if row['avgLowPrice'] else 0
                         self.prices[int(row['item_id'])] = avg_low
+        
+        self.theo_base_kill_val = 0
+        for item, info in DROP_TABLE.items():
+            self.theo_base_kill_val += self.get_item_value(item) * info['rate'] * info['qty']
+        if self.theo_base_kill_val < 5000: self.theo_base_kill_val = 26500
 
     def load_wealth_data(self):
         if os.path.exists("live_wealth.json"):
@@ -196,6 +267,8 @@ class BBDGUI:
                     total_attacks = data.get('total_attacks', None) 
                     active_seconds = data.get('active_seconds', 0)
 
+                    theo = data.get('theoretical_stats', {})
+
                     # Extract ASTB Banking logic
                     bank_sec, trips = 0, 0
                     away_ts = None
@@ -222,6 +295,7 @@ class BBDGUI:
                             break
 
                     self.sessions.append({
+                        'id': data.get('session_id'),
                         'name': sess_name,
                         'date': start_dt,
                         'duration_sec': duration_sec,
@@ -232,6 +306,7 @@ class BBDGUI:
                         'trips': trips,
                         'gross_gp': gross_gp,
                         'net_profit': net_profit,
+                        'theo_ttk': theo.get('ttk', 0), 'theo_dps': theo.get('dps', 0), 'theo_acc': theo.get('accuracy', 0),
                         'duration_gpph': duration_gpph
                     })
             except Exception as e:
@@ -301,8 +376,8 @@ class BBDGUI:
         c = self.win_history.canvas
         c.delete("all")
         
-        # Brought MISS back, carefully packed to fit 50 chars (360px)
-        headers = f"{'SESS':<6} {'DATE':<11} {'KILLS':>5} {'GGP/s':>5} {'ASTB':>4} {'MISS':>4} {'EFF%':>4} {'GP/D':>5}"
+        # --- SWAPPED GGP/S FOR ΔTTK, AND GP/D FOR LtLCK% ---
+        headers = f"{'SESS':<6} {'DATE':<11} {'KILLS':>5} {'ΔTTK':>5} {'ASTB':>4} {'MISS':>4} {'EFF%':>4} {'LtLCK':>6}"
         self.draw_text(c, 10, 5, headers, HEADER_COLOR, FONT_BOLD)
         c.create_line(10, 20, 350, 20, fill="gray")
         y = 25
@@ -311,11 +386,18 @@ class BBDGUI:
             date_str = s['date'].strftime("%m/%d %H:%M") 
             astb_s, miss_s, eff_s = self.calculate_efficiency(s['duration_sec'], s['active_sec'], s['attacks'], s['bank_sec'], s['trips'])
             
-            # GGP/s Calculation
-            gpd = s['gross_gp'] / s['kills'] if s['kills'] > 0 else 0
-            ggps = s['gross_gp'] / s['duration_sec'] if s['duration_sec'] > 0 else 0
+            # ΔTTK Math
+            if s['kills'] > 0 and s['theo_ttk'] > 0:
+                act_ttk = s['active_sec'] / s['kills']
+                dt_str = f"{act_ttk - s['theo_ttk']:+.1f}s"
+            else: dt_str = "-"
             
-            row_txt = f"{s['name']:<6} {date_str:<11} {s['kills']:>5} {ggps:>5.1f} {astb_s:>4} {miss_s:>4} {eff_s:>4} {gpd:>5.0f}"
+            # LtLCK% Math
+            gpd = s['gross_gp'] / s['kills'] if s['kills'] > 0 else 0
+            ltlck = (gpd / self.theo_base_kill_val) * 100 if getattr(self, 'theo_base_kill_val', 26500) > 0 else 0
+            lt_str = f"{ltlck:.0f}%" if ltlck > 0 else "-"
+            
+            row_txt = f"{s['name']:<6} {date_str:<11} {s['kills']:>5} {dt_str:>5} {astb_s:>4} {miss_s:>4} {eff_s:>4} {lt_str:>6}"
             self.draw_text(c, 10, y, row_txt)
             y += 15
 
@@ -325,8 +407,8 @@ class BBDGUI:
         now = datetime.now()
         periods =[("24h", 24), ("3d", 72), ("7d", 168), ("30d", 720)]
 
-        # Brought R-HR, MISS, and K/R-HR back. Packed to fit ~68 chars (525px max)
-        headers = f"{'PERIOD':<6} {'SESS':<4} {'HRS':<4} {'R-HR':<4}| {'GP/D':>5} {'NGP/s':>5} {'ASTB':>4} {'MISS':>4} {'EFF%':>4} | {'KILLS':>5} {'K/HR':>4} {'K/R-HR':>6}"
+        # Headers updated for LtLCK and ΔTTK
+        headers = f"{'PERIOD':<6} {'SESS':<4} {'HRS':<4} {'R-HR':<4}| {'LtLCK':>5} {'NGP/s':>5} {'ASTB':>4} {'MISS':>4} {'EFF%':>4} | {'KILLS':>5} {'K/HR':>4} {'ΔTTK':>5}"
         self.draw_text(c, 10, 5, headers, HEADER_COLOR, FONT_BOLD)
         c.create_line(10, 20, 515, 20, fill="gray")
 
@@ -347,7 +429,6 @@ class BBDGUI:
             total_atk_sec = sum(s['active_sec'] for s in valid_atk) if valid_atk else 0
             total_attacks = sum(s['attacks'] for s in valid_atk) if valid_atk else None
             
-            # Match Net Ledger sessions
             matched_net =[s for s in subset if s['net_profit'] is not None]
 
             if count > 0:
@@ -355,8 +436,10 @@ class BBDGUI:
                 astb_s = f"{astb:.0f}s" if total_trips > 0 else "-"
                 upt_pct = (total_act_sec / total_dur_sec * 100) if total_dur_sec > 0 else 0
                 
-                # Gross GP/D
+                # LtLCK %
                 gpd = total_gross / kills if kills > 0 else 0
+                ltlck = (gpd / getattr(self, 'theo_base_kill_val', 26500)) * 100 if getattr(self, 'theo_base_kill_val', 26500) > 0 else 0
+                lt_str = f"{ltlck:.0f}%" if ltlck > 0 else "-"
                 
                 # Net GP/s (NGP/s)
                 if matched_net:
@@ -369,7 +452,6 @@ class BBDGUI:
 
                 if total_attacks is not None and total_atk_sec > 0:
                     max_attacks = int((total_atk_sec / 0.6) // 5)
-                    # Brought MISS back
                     dropped = max(0, max_attacks - total_attacks)
                     miss_per_hr = dropped * (3600.0 / total_atk_sec)
                     atk_pct = min((total_attacks / max_attacks * 100) if max_attacks > 0 else 0, 100.0)
@@ -379,15 +461,20 @@ class BBDGUI:
                     eff_s = f"{eff_pct:.0f}%"
                 else: 
                     miss_s, eff_s = "-", "-"
+                    
+                # ΔTTK Math
+                weighted_theo = sum(s.get('theo_ttk', 0) * s['kills'] for s in subset) / kills if kills > 0 else 0
+                act_ttk = total_act_sec / kills if kills > 0 else 0
+                dt_str = f"{act_ttk - weighted_theo:+.1f}s" if weighted_theo > 0 and kills > 0 else "-"
             else: 
-                astb_s, miss_s, eff_s, gpd, ngps_str = "-", "-", "-", 0, "-"
+                # If no data, fill everything with dashes to match format
+                astb_s, miss_s, eff_s, lt_str, ngps_str, dt_str = "-", "-", "-", "-", "-", "-"
 
             hrs_logged = total_dur_sec / 3600
             k_hr = (kills / hrs_logged) if hrs_logged > 0 else 0
-            # Brought K/R-HR back
-            k_r_hr = (kills / r_hours) if r_hours > 0 else 0
 
-            row_txt = f"{name:<6} {count:<4} {hrs_logged:<4.1f} {r_hours:<4}| {gpd:>5.0f} {ngps_str:>5} {astb_s:>4} {miss_s:>4} {eff_s:>4} | {kills:>5} {k_hr:>4.1f} {k_r_hr:>6.1f}"
+            # Swapped 'gpd' for 'lt_str' and swapped 'k_r_hr' for 'dt_str'
+            row_txt = f"{name:<6} {count:<4} {hrs_logged:<4.1f} {r_hours:<4}| {lt_str:>5} {ngps_str:>5} {astb_s:>4} {miss_s:>4} {eff_s:>4} | {kills:>5} {k_hr:>4.1f} {dt_str:>5}"
             self.draw_text(c, 10, y, row_txt)
             y += 20
 
@@ -584,8 +671,6 @@ class BBDGUI:
         try:
             conn = sqlite3.connect("combat_telemetry.db")
             cur = conn.cursor()
-            
-            # Find the most recently logged session ID
             cur.execute("SELECT session_id FROM hitsplats ORDER BY id DESC LIMIT 1")
             res = cur.fetchone()
             if not res:
@@ -594,12 +679,9 @@ class BBDGUI:
                 return
                 
             latest_session = res[0]
-            
-            # Grab all damage values for this specific session
             cur.execute("SELECT damage FROM hitsplats WHERE session_id = ?", (latest_session,))
             hits = [row[0] for row in cur.fetchall()]
             conn.close()
-            
         except Exception as e:
             self.draw_text(c, 10, 10, f"DB Error: {e}", "red")
             return
@@ -608,23 +690,50 @@ class BBDGUI:
             self.draw_text(c, 10, 10, "No attacks logged in current session.", "gray")
             return
 
-        # --- Calculate Metrics ---
+        # Fetch baseline stats from the active session config
+        theo_dps, theo_acc, theo_ttk, act_ttk = 0, 0, 0, 0
+        
+        # Safely find the session in our history that exactly matches the SQLite latest_session ID
+        active_session = next((s for s in self.sessions if s.get('id') == latest_session), None)
+        
+        if active_session: 
+            theo_dps = active_session.get('theo_dps', 0)
+            theo_acc = active_session.get('theo_acc', 0)
+            theo_ttk = active_session.get('theo_ttk', 0)
+            
+            if active_session['kills'] > 0: 
+                act_ttk = active_session['active_sec'] / active_session['kills']
+
+        # --- Calculate Actuals ---
         bolts_fired = len(hits)
+        zeroes = sum(1 for h in hits if h == 0)
         total_dmg = sum(hits)
         
-        # Active DPS: Total Damage / (Bolts Fired * 3.0 seconds per attack)
-        actual_dps = total_dmg / (bolts_fired * 3.0) if bolts_fired > 0 else 0
+        act_acc = ((bolts_fired - zeroes) / bolts_fired) * 100 if bolts_fired > 0 else 0
+        act_dps = total_dmg / (bolts_fired * 3.0) if bolts_fired > 0 else 0
         
+        d_dps = act_dps - theo_dps if theo_dps > 0 else 0
+        d_acc = act_acc - theo_acc if theo_acc > 0 else 0
+        d_ttk = act_ttk - theo_ttk if (theo_ttk > 0 and act_ttk > 0) else 0
+
         # --- Draw Text Headers ---
         self.draw_text(c, 10, 5, "LIVE COMBAT TELEMETRY", HEADER_COLOR, ("Consolas", 10, "bold"))
         c.create_line(10, 20, 340, 20, fill="gray")
         
-        # Dropped "Miss%" and rebalanced the remaining text
-        self.draw_text(c, 10, 25, f"Bolts Fired: {bolts_fired:,}", TEXT_COLOR, ("Consolas", 9))
-        self.draw_text(c, 215, 25, f"Act DPS: {actual_dps:.2f}", "#00FFFF", ("Consolas", 9, "bold"))
+        def draw_stat(x, label, actual, delta, is_ttk=False):
+            self.draw_text(c, x, 25, f"{label}: {actual}", TEXT_COLOR, ("Consolas", 8, "bold"))
+            if delta != 0:
+                if is_ttk: color = "#00FF00" if delta < 0 else "#FF4444"
+                else: color = "#00FF00" if delta > 0 else "#FF4444"
+                offset = x + len(f"{label}: {actual}") * 6
+                self.draw_text(c, offset, 25, f"({delta:+.1f})", color, ("Consolas", 8, "bold"))
+        
+        draw_stat(10, "DPS", f"{act_dps:.1f}", d_dps, is_ttk=False)
+        draw_stat(120, "Acc", f"{act_acc:.0f}%", d_acc, is_ttk=False)
+        draw_stat(230, "TTK", f"{act_ttk:.1f}s", d_ttk, is_ttk=True)
 
-        # --- Calculate Histogram Bins ---
-        bins = [0] * 7
+        # --- Histogram Bins ---
+        bins =[0] * 7
         for h in hits:
             if h == 0: bins[0] += 1
             elif h <= 10: bins[1] += 1
@@ -636,23 +745,12 @@ class BBDGUI:
             
         max_bin = max(bins) if max(bins) > 0 else 1
 
-        # --- Draw Native Bar Chart ---
-        bar_w = 28   
-        gap = 12     
-        start_x = 45 
-        base_y = 80  
-        max_h = 35   
-        
+        bar_w = 28; gap = 12; start_x = 45; base_y = 80; max_h = 35   
         labels =["0", "1-10", "11-20", "21-30", "31-40", "41-50", "51+"]
-        
-        # Colors: Pure White for 0, then a smooth grayscale gradient for the damage hits
         colors =["#FFFFFF", "#444444", "#555555", "#666666", "#777777", "#888888", "#999999"]
         
-        # Draw physical X and Y axis lines
         c.create_line(start_x - 5, base_y, start_x + (bar_w + gap)*7, base_y, fill="#555555") 
         c.create_line(start_x - 5, base_y, start_x - 5, base_y - max_h - 5, fill="#555555")   
-        
-        # Y-axis scale markers
         c.create_text(start_x - 10, base_y - max_h, text=str(max_bin), fill="#888888", font=("Consolas", 7), anchor="e")
         c.create_text(start_x - 10, base_y, text="0", fill="#888888", font=("Consolas", 7), anchor="e")
         
@@ -660,32 +758,20 @@ class BBDGUI:
             h = (bins[i] / max_bin) * max_h
             x = start_x + i * (bar_w + gap)
             draw_h = h if h > 0 else 1 
-            
             c.create_rectangle(x, base_y - draw_h, x + bar_w, base_y, fill=colors[i], outline="#222222")
             
-            # --- PERCENTAGE ANNOTATIONS ---
             pct = (bins[i] / bolts_fired) * 100 if bolts_fired > 0 else 0
-            
-            if pct >= 1:
-                pct_text = f"{pct:.0f}%"
-            elif pct > 0:
-                pct_text = "<1%"
-            else:
-                pct_text = ""
+            if pct >= 1: pct_text = f"{pct:.0f}%"
+            elif pct > 0: pct_text = "<1%"
+            else: pct_text = ""
                 
             if pct_text:
-                # If the bar is tall enough, put text inside it
                 if draw_h >= 10:
-                    t_y = base_y - (draw_h / 2)
-                    t_color = "black" if i == 0 else "white"
-                # If the bar is too short, float the text just above the bar in white
+                    t_y, t_color = base_y - (draw_h / 2), "black" if i == 0 else "white"
                 else:
-                    t_y = base_y - draw_h - 5
-                    t_color = "white"
-                    
+                    t_y, t_color = base_y - draw_h - 5, "white"
                 c.create_text(x + (bar_w / 2), t_y, text=pct_text, fill=t_color, font=("Consolas", 7, "bold"), anchor="center")
             
-            # X-Axis labels underneath the bars
             c.create_text(x + (bar_w / 2), base_y + 8, text=labels[i], fill="#AAAAAA", font=("Consolas", 7), anchor="center")
 
     # --- ACTIONS ---
@@ -723,6 +809,27 @@ class BBDGUI:
         
         self.draw_waffle()
         self.draw_telemetry()
+        self.draw_ticks()
+
+    def draw_ticks(self):
+        c = self.win_ticks.canvas
+        c.delete("all")
+        start_x, start_y = 5, 3
+        cols, rows = 31, 7
+        cell_w, cell_h = 8, 8
+        
+        for i, tick in enumerate(self.tick_history):
+            r = i // cols
+            col = i % cols
+            x = start_x + (col * cell_w)
+            y = start_y + (r * cell_h)
+            
+            # Draw a solid 5x5 cell block using the core color
+            c.create_rectangle(x+1, y+1, x+6, y+6, fill=tick['color'], outline="")
+            
+            if tick['is_attack']:
+                # Distinct White Initiation Line on the right margin
+                c.create_line(x+7, y, x+7, y+8, fill="white")
 
     def start_auto_refresh(self):
         self.root.after(5000, self.run_auto_refresh)

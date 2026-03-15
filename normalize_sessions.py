@@ -138,6 +138,15 @@ def build_static_prices():
             
     return final_prices
 
+def unpack_singletons(obj):
+    if isinstance(obj, list):
+        if len(obj) == 1:
+            return unpack_singletons(obj[0])
+        return [unpack_singletons(x) for x in obj]
+    elif isinstance(obj, dict):
+        return {k: unpack_singletons(v) for k, v in obj.items()}
+    return obj
+
 def main():
     print("--- Normalizing BBD Sessions Data ---")
     
@@ -166,6 +175,7 @@ def main():
         
         with open(os.path.join(DATA_DIR, filename), 'r') as f:
             data = json.load(f)
+            data = unpack_singletons(data)
             
         start_time = pd.to_datetime(data.get('start_time'))
         end_time = pd.to_datetime(data.get('end_time', pd.Timestamp.now().isoformat()))
@@ -203,7 +213,14 @@ def main():
                 actual_supply_cost += abs(row['qty_delta']) * price
 
         # THE MAGIC MATH: Luck-Adjusted T-NGP/hr
-        expected_revenue = kills * base_kill_value
+        session_kill_value = base_kill_value
+        
+        # Option A: The Phantom Wealth Fix
+        # If Bonecrusher is equipped, we never loot the bones, so we subtract their market value from the expected drop.
+        if data.get("config", {}).get("bones") == "Bonecrusher necklace":
+            session_kill_value -= static_prices.get("dragon bones", 0)
+
+        expected_revenue = kills * session_kill_value
         t_ngp_hr = (expected_revenue - actual_supply_cost) / duration_hrs
         
         # Determine raw actual revenue just for variance calculation
@@ -214,13 +231,36 @@ def main():
         
         total_attacks = data.get("total_attacks")
         
-        # Use exact GUI Tick-Math, and protect against missing data!
+        # Use dynamic weapon tick speed to perfectly calculate missed attacks and Active TTK
+        weapon = data.get("config", {}).get("weapon", "Unknown")
+        
+        # Crossbows and T-Bow attack every 6 ticks standard, 5 ticks (3.0s) on Rapid.
+        # Assuming Rapid is always used.
+        if weapon in ["Dragon hunter crossbow", "Twisted bow", "Dragon crossbow", "Rune crossbow"]:
+            weapon_ticks = 5
+        # Fallback assumption
+        else:
+            weapon_ticks = 5
+
+        delta_kph = None
+
         if total_attacks is not None and active_sec > 0:
             active_ticks = active_sec / 0.6
-            max_attacks = int(active_ticks // 5)
+            max_attacks = int(active_ticks // weapon_ticks)
             
             dropped = max(0, max_attacks - total_attacks)
             miss_per_hr = dropped * (3600.0 / active_sec)
+            
+            # THE NEW METRIC: Calculate Actual KPH vs Theoretical KPH
+            if kills > 0:
+                actual_active_ttk = (total_attacks / kills) * (weapon_ticks * 0.6)
+                if actual_active_ttk > 0:
+                    actual_kph = 3600.0 / actual_active_ttk
+                    
+                    theoretical_ttk = data.get("theoretical_stats", {}).get("ttk", 0)
+                    if theoretical_ttk > 0:
+                        theoretical_kph = 3600.0 / theoretical_ttk
+                        delta_kph = actual_kph - theoretical_kph
         else:
             # If we don't have attack data, set to None so we don't poison the regression
             miss_per_hr = None 
@@ -238,7 +278,8 @@ def main():
             "rng_variance_gp": rng_variance_gp,
             "t_ngp_hr": t_ngp_hr,
             "astb": astb,
-            "miss_per_hr": miss_per_hr
+            "miss_per_hr": miss_per_hr,
+            "delta_kph": delta_kph
         }
         
         # Flatten Gear Config for MLR

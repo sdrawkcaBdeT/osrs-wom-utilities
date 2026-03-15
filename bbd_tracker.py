@@ -16,6 +16,7 @@ HOST = '127.0.0.1'
 PORT = 5000
 DATA_DIR = "bbd_data"
 IMG_DIR = "item_images"
+DPS_PROFILES_FILE = "dps_profiles.json"
 
 if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
 if not os.path.exists(IMG_DIR): os.makedirs(IMG_DIR)
@@ -136,20 +137,14 @@ ITEM_MAP = {
 server = Flask(__name__)
 app_instance = None 
 
-LIVE_HP_STATE = {"current": 0, "max": 315, "active": False}
+LIVE_HP_STATE = {"current": 0, "max": 315, "active": False, "phase": "IDLE", "last_attack": 0}
 
 def init_telemetry_db():
     conn = sqlite3.connect('combat_telemetry.db')
     c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS hitsplats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
-            timestamp DATETIME,
-            damage INTEGER,
-            dragon_hp_before INTEGER
-        )
-    ''')
+    c.execute('''CREATE TABLE IF NOT EXISTS hitsplats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT,
+            timestamp DATETIME, damage INTEGER, dragon_hp_before INTEGER)''')
     conn.commit()
     conn.close()
 
@@ -162,22 +157,16 @@ def handle_event():
     ev_type = data.get('event')
     payload = data.get('payload')
 
-    # --- NEW: COMBAT TELEMETRY INTERCEPT ---
+    # --- COMBAT TELEMETRY ---
     if ev_type == 'combat_telemetry':
-        # Only log attacks if the GUI has an active session running!
         if app_instance and app_instance.is_active and app_instance.session_id:
             try:
                 conn = sqlite3.connect('combat_telemetry.db')
                 c = conn.cursor()
-                c.execute("""
-                    INSERT INTO hitsplats (session_id, timestamp, damage, dragon_hp_before) 
-                    VALUES (?, ?, ?, ?)
-                """, (
-                    app_instance.session_id, 
-                    datetime.datetime.now().isoformat(), 
-                    payload.get('damage', 0), 
-                    payload.get('hp_before', -1)
-                ))
+                c.execute("""INSERT INTO hitsplats (session_id, timestamp, damage, dragon_hp_before) 
+                             VALUES (?, ?, ?, ?)""", 
+                          (app_instance.session_id, datetime.datetime.now().isoformat(), 
+                           payload.get('damage', 0), payload.get('hp_before', -1)))
                 conn.commit()
                 conn.close()
             except Exception as e:
@@ -186,7 +175,7 @@ def handle_event():
 
     # --- HP UPDATE CATCH ---
     if ev_type == 'hp_update':
-        LIVE_HP_STATE = payload
+        LIVE_HP_STATE.update(payload)
 
     # --- AUDIO TRIGGER ---
     if ev_type == 'notification':
@@ -258,6 +247,9 @@ class BBDTrackerApp(ctk.CTk):
 
         self.setup_ui()
         self.update_timer()
+
+        self.dps_profiles = self.load_dps_profiles()
+        self.check_dps_profile()
         
         threading.Thread(target=run_server, daemon=True).start()
 
@@ -331,6 +323,79 @@ class BBDTrackerApp(ctk.CTk):
             "Prayer Potions",
             "Moonlight Moth"
         ])
+
+        # === DPS PROFILE ===
+        self.dps_frame = CollapsibleFrame(self.scroll_setup, title="DPS Calculator Stats")
+        self.dps_frame.pack(fill="x", padx=5, pady=5)
+        df = self.dps_frame.content_frame
+        
+        self.lbl_profile_status = ctk.CTkLabel(df, text="Check Setup...", font=("Arial", 10, "bold"))
+        self.lbl_profile_status.grid(row=0, column=0, columnspan=2, pady=(0, 5))
+        
+        self.ent_max_hit = ctk.CTkEntry(df, width=80); ctk.CTkLabel(df, text="Max Hit", font=("Arial", 10)).grid(row=1, column=0, sticky="w", padx=2); self.ent_max_hit.grid(row=1, column=1, padx=2, pady=2)
+        self.ent_exp_hit = ctk.CTkEntry(df, width=80); ctk.CTkLabel(df, text="Exp Hit", font=("Arial", 10)).grid(row=2, column=0, sticky="w", padx=2); self.ent_exp_hit.grid(row=2, column=1, padx=2, pady=2)
+        self.ent_dps = ctk.CTkEntry(df, width=80); ctk.CTkLabel(df, text="DPS", font=("Arial", 10)).grid(row=3, column=0, sticky="w", padx=2); self.ent_dps.grid(row=3, column=1, padx=2, pady=2)
+        self.ent_ttk = ctk.CTkEntry(df, width=80); ctk.CTkLabel(df, text="Avg TTK", font=("Arial", 10)).grid(row=4, column=0, sticky="w", padx=2); self.ent_ttk.grid(row=4, column=1, padx=2, pady=2)
+        self.ent_acc = ctk.CTkEntry(df, width=80); ctk.CTkLabel(df, text="Accuracy %", font=("Arial", 10)).grid(row=5, column=0, sticky="w", padx=2); self.ent_acc.grid(row=5, column=1, padx=2, pady=2)
+        
+        self.ent_rng_str = ctk.CTkEntry(df, width=80); ctk.CTkLabel(df, text="Rng Strength", font=("Arial", 10)).grid(row=6, column=0, sticky="w", padx=2); self.ent_rng_str.grid(row=6, column=1, padx=2, pady=2)
+        self.ent_rng_acc = ctk.CTkEntry(df, width=80); ctk.CTkLabel(df, text="Rng Attack", font=("Arial", 10)).grid(row=7, column=0, sticky="w", padx=2); self.ent_rng_acc.grid(row=7, column=1, padx=2, pady=2)
+        self.ent_pray_bonus = ctk.CTkEntry(df, width=80); ctk.CTkLabel(df, text="Prayer Bonus", font=("Arial", 10)).grid(row=8, column=0, sticky="w", padx=2); self.ent_pray_bonus.grid(row=8, column=1, padx=2, pady=2)
+        
+        self.btn_save_profile = ctk.CTkButton(df, text="💾 Save Profile", fg_color="#333", command=self.save_current_profile)
+        self.btn_save_profile.grid(row=9, column=0, columnspan=2, pady=5, sticky="ew")
+
+    def load_dps_profiles(self):
+        if os.path.exists(DPS_PROFILES_FILE):
+            try:
+                with open(DPS_PROFILES_FILE, 'r') as f: return json.load(f)
+            except: pass
+        return {}
+
+    def save_dps_profiles(self):
+        with open(DPS_PROFILES_FILE, 'w') as f: json.dump(self.dps_profiles, f, indent=4)
+
+    def get_loadout_signature(self):
+        # Build a unique string based on the gear slots that dictate DPS
+        return f"{self.cfg_weapon.get()}_{self.cfg_ammo.get()}_{self.cfg_head.get()}_{self.cfg_body.get()}_{self.cfg_legs.get()}_{self.cfg_hands.get()}_{self.cfg_back.get()}_{self.cfg_feet.get()}_{self.cfg_ring.get()}_{self.cfg_pray.get()}"
+
+    def check_dps_profile(self, *args):
+        sig = self.get_loadout_signature()
+        if sig in self.dps_profiles:
+            stats = self.dps_profiles[sig]
+            self.ent_max_hit.delete(0, 'end'); self.ent_max_hit.insert(0, str(stats.get("max_hit", "")))
+            self.ent_exp_hit.delete(0, 'end'); self.ent_exp_hit.insert(0, str(stats.get("exp_hit", "")))
+            self.ent_dps.delete(0, 'end'); self.ent_dps.insert(0, str(stats.get("dps", "")))
+            self.ent_ttk.delete(0, 'end'); self.ent_ttk.insert(0, str(stats.get("ttk", "")))
+            self.ent_acc.delete(0, 'end'); self.ent_acc.insert(0, str(stats.get("accuracy", "")))
+
+            self.ent_rng_str.delete(0, 'end'); self.ent_rng_str.insert(0, str(stats.get("rng_str", "")))
+            self.ent_rng_acc.delete(0, 'end'); self.ent_rng_acc.insert(0, str(stats.get("rng_acc", "")))
+            self.ent_pray_bonus.delete(0, 'end'); self.ent_pray_bonus.insert(0, str(stats.get("pray_bonus", "")))
+
+            self.lbl_profile_status.configure(text="Profile Loaded ✓", text_color="green")
+        else:
+            for ent in[self.ent_max_hit, self.ent_exp_hit, self.ent_dps, self.ent_ttk, self.ent_acc, self.ent_rng_str, self.ent_rng_acc, self.ent_pray_bonus]:
+                ent.delete(0, 'end')
+            self.lbl_profile_status.configure(text="New Setup! Enter Stats.", text_color="yellow")
+
+    def save_current_profile(self):
+        sig = self.get_loadout_signature()
+        try:
+            self.dps_profiles[sig] = {
+                "max_hit": float(self.ent_max_hit.get() or 0),
+                "exp_hit": float(self.ent_exp_hit.get() or 0),
+                "dps": float(self.ent_dps.get() or 0),
+                "ttk": float(self.ent_ttk.get() or 0),
+                "accuracy": float(self.ent_acc.get() or 0),
+                "rng_str": float(self.ent_rng_str.get() or 0),
+                "rng_acc": float(self.ent_rng_acc.get() or 0),
+                "pray_bonus": float(self.ent_pray_bonus.get() or 0)
+            }
+            self.save_dps_profiles()
+            self.lbl_profile_status.configure(text="Profile Saved ✓", text_color="green")
+        except ValueError:
+            self.lbl_profile_status.configure(text="Error: Valid numbers only", text_color="red")
 
         # === CENTER PANEL ===
         self.panel_center = ctk.CTkFrame(self)
@@ -508,7 +573,7 @@ class BBDTrackerApp(ctk.CTk):
         frame = ctk.CTkFrame(parent, fg_color="transparent")
         frame.pack(fill="x", padx=2, pady=2)
         ctk.CTkLabel(frame, text=label, font=("Arial", 10)).pack(anchor="w")
-        opt = ctk.CTkOptionMenu(frame, values=values)
+        opt = ctk.CTkOptionMenu(frame, values=values, command=self.check_dps_profile)
         opt.pack(fill="x")
         return opt
 
@@ -608,14 +673,29 @@ class BBDTrackerApp(ctk.CTk):
             "pray_restore": self.cfg_pray_restore.get(),
         }
 
+        theoretical_stats = {}
+        try:
+            theoretical_stats = {
+                "max_hit": float(self.ent_max_hit.get() or 0),
+                "exp_hit": float(self.ent_exp_hit.get() or 0),
+                "dps": float(self.ent_dps.get() or 0),
+                "ttk": float(self.ent_ttk.get() or 0),
+                "accuracy": float(self.ent_acc.get() or 0),
+                "rng_str": float(self.ent_rng_str.get() or 0),
+                "rng_acc": float(self.ent_rng_acc.get() or 0),
+                "pray_bonus": float(self.ent_pray_bonus.get() or 0)
+            }
+        except: pass
+
         data = {
             "session_id": self.session_id,
             "start_time": datetime.datetime.fromtimestamp(self.start_time).isoformat(),
             "end_time": self.get_iso_time(),
             "total_kills": self.kill_count,
-            "total_attacks": self.attack_count,        # <--- NEW
-            "active_seconds": total_active_seconds,    # <--- NEW
+            "total_attacks": self.attack_count,
+            "active_seconds": total_active_seconds,
             "config": config_data,
+            "theoretical_stats": theoretical_stats,
             "loot_summary": self.loot_tracker,
             "event_timeline": self.event_log
         }
@@ -771,8 +851,7 @@ class BBDTrackerApp(ctk.CTk):
         # --- NEW: Catch Attack ---
         if event_type == "player_attack":
             self.attack_count += 1
-            # Optional: I could save silently here, but saving on every shot 
-            # might be overkill. Saving on every kill/phase change is better.
+            LIVE_HP_STATE["last_attack"] = time.time()
 
         elif event_type == "phase_change":
             in_zone = payload.get("in_zone")
@@ -787,6 +866,7 @@ class BBDTrackerApp(ctk.CTk):
                 # -----------------------------------------------------------
                 
                 self.current_phase = phase
+                LIVE_HP_STATE["phase"] = phase
                 self.lbl_phase.configure(text=phase, text_color="#d32f2f" if in_zone else "gray")
                 self.log_event("phase", f"Phase Changed: {phase}")
                 self.save_data(silent=True) # Save quietly on phase change

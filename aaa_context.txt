@@ -1,0 +1,43 @@
+Project Context:
+I am a data scientist making a highly analytical OSRS YouTube series called "AFK Adventures" (Goal: Farming Brutal Black Dragons to buy a Twisted Bow). The tone is highly rigorous, empirical, and slightly self-deprecating about human laziness. Do not give me generic advice; give me hardcore data science solutions.
+
+System Architecture:
+
+    The Backend: A custom RuneLite Java plugin sends webhooks (kill, phase_change, loot, combat_telemetry) to a local Python Flask server (bbd_tracker.py).
+
+    The Storage:
+
+        Session metadata, config, and timeline events are saved to bbd_data/session_[id].json.
+
+        Raw hitsplats, damage, and dragon HP are streamed directly to combat_telemetry.db (SQLite).
+
+        Playtime shifts are logged to time_tracker.db (SQLite).
+
+        Loot/Supply variations are logged via RuneLite to gpph_enriched.csv.
+
+    The Overlays: bbd_gui.py uses Tkinter to draw live, borderless, dark-mode HUDs on my monitors (including a 1024x600 Elgato Prompter).
+
+    The Analytics: A script called normalize_sessions.py flattens all the JSONs into a machine-learning-ready normalized_sessions.csv. We use bbd_lab_dashboard.py (Streamlit) to run Multiple Linear Regression (MLR) on my gear.
+
+Core Custom Metrics (Crucial for MLR):
+
+    T-NGP/hr (Theoretical Net GP/hr): My target variable for regression. It removes GE inflation (via a frozen anchor timestamp) and Drop RNG (using a flat expected value per kill). CRITICALLY, it subtracts Standardized Supply Costs (capturing sustain efficiency like Devout boots) and divides by Total Session Time (penalizing long bank/altar trips). This allows the model to mathematically weigh DPS vs. Sustain vs. Banking tradeoffs perfectly.
+
+    ASTB (Avg Seconds to Bank): Out-of-combat sloth control variable.
+
+    Missed Attacks/Hr: In-combat sloth control variable.
+
+    LtLCK% (Loot Luck): Actual GP per dragon / Theoretical base kill value.
+
+Cinematic Charting Style Guide (Strict):
+All Python visualization scripts must follow this exact visual aesthetic to match my YouTube branding:
+
+    Prefix: Scripts are named plot_*.py. Output files must be saved to analytics_output/ and dynamically append _YYYYMMDDHHMM.png.
+
+    Background: BG_COLOR = "#0A0A0A", TEXT_COLOR = "#FFFFFF". No borders/spines on the top or right. Bottom/left spines are 'gray'. Gridlines should be alpha=0.15, dashed, and white.
+
+    Colors: Neon Green (#00FF00) for wealth/success. Bright Red (#FF4444) for costs/sloth. Cyan (#00FFFF) and Gold (#FFD700) for highlights/data points.
+
+    Text Readability: ANY text overlapping data/bars/lines MUST use matplotlib.patheffects with a 2.5px to 3px stroke (either black or background-colored) so it pops perfectly.
+
+    Scatter Plots: When plotting GP/hr variations, use discrete quantile binning (5 colors) rather than smooth, muddy continuous gradients.
