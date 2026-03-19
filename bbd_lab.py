@@ -252,7 +252,7 @@ else:
     df_res = pd.DataFrame(columns=["Category", "Item", "Impact (GP/hr)", "P-Value", "Verdict"])
 
 # --- BUILD THE TABS ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["The Verdict (MLR)", "Optimizer", "Experiment Matrix", "Wealth Tracker", "Visual Loadouts"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["The Verdict (MLR)", "Optimizer", "Experiment Matrix", "Wealth Tracker", "Visual Loadouts", "OSRS 100 Index"])
 
 import base64
 from pathlib import Path
@@ -812,3 +812,264 @@ with tab5:
                     st.markdown(f"- {p}")
             else:
                 st.markdown("*No additional configuration parameters logged for this setup.*")
+
+with tab6:
+    st.header("OSRS 100 Market Index")
+    st.write("A 60-day rolling, monthly-reconstituted benchmark tracking the broader Old School RuneScape economy.")
+    
+    try:
+        import json
+        with open("market_data/osrs_100_snapshot.json", "r") as f:
+            snapshot = json.load(f)
+            
+        cols = st.columns(5)
+        cols[0].metric("Index Level", f"{snapshot['index_level']:,.2f}", f"{snapshot['1d_return']*100:+.2f}% (1D)")
+        cols[1].metric("7-Day Return", f"{snapshot['7d_return']*100:+.2f}%")
+        cols[2].metric("30-Day Return", f"{snapshot['30d_return']*100:+.2f}%")
+        cols[3].metric("Since Inception", f"{snapshot['inception_return']*100:+.2f}%")
+        cols[4].metric("Constituents", snapshot['active_constituents'])
+        
+        st.markdown(f"*(Latest Rebalance: {snapshot['latest_rebalance_date'][:10]} | History starts early 2026)*")
+        st.markdown("---")
+        
+        # Load necessary data
+        df_index = pd.read_csv("market_data/osrs_100_index_daily.csv")
+        df_index['date'] = pd.to_datetime(df_index['date'])
+        
+        df_comp = pd.read_csv("market_data/osrs_100_constituents.csv")
+        df_comp['rebalance_date'] = pd.to_datetime(df_comp['rebalance_date'])
+        
+        try:
+            df_ad = pd.read_csv("market_data/osrs_100_adds_drops.csv")
+            df_ad['rebalance_date'] = pd.to_datetime(df_ad['rebalance_date'])
+        except:
+            df_ad = pd.DataFrame()
+            
+        latest_rebal = df_comp['rebalance_date'].max()
+        df_latest = df_comp[df_comp['rebalance_date'] == latest_rebal].copy()
+        
+        # Determine current month's return for formatting
+        df_index['year_month'] = df_index['date'].dt.to_period('M')
+        monthly_returns = df_index.groupby('year_month').apply(
+            lambda x: (x.iloc[-1]['index_level'] / x.iloc[0]['index_level']) - 1
+        ).reset_index(name='return')
+        monthly_returns['year_month'] = monthly_returns['year_month'].astype(str)
+        
+        # CHART 1 & 2: Daily Index and Monthly Returns (side-by-side)
+        chart_col1, chart_col2 = st.columns([3, 1])
+        
+        with chart_col1:
+            fig_index = go.Figure()
+            fig_index.add_trace(go.Scatter(
+                x=df_index['date'], 
+                y=df_index['index_level'],
+                mode='lines',
+                line=dict(color='#FFD700', width=3),
+                name="OSRS 100",
+                fill='tozeroy',
+                fillcolor='rgba(255, 215, 0, 0.1)'
+            ))
+            
+            # Cumulative Baseline
+            fig_index.add_trace(go.Scatter(
+                x=[df_index['date'].min(), df_index['date'].max()],
+                y=[1000, 1000],
+                mode='lines',
+                line=dict(color='white', width=1, dash='dash'),
+                name="Base (1000)",
+                hoverinfo='skip'
+            ))
+            
+            fig_index.update_layout(
+                title="OSRS 100 Daily Index Level",
+                template="plotly_dark",
+                paper_bgcolor="#1E1E1E",
+                plot_bgcolor="#1E1E1E",
+                margin=dict(l=20, r=20, t=40, b=20),
+                xaxis=dict(showgrid=True, gridcolor="#222222", title=""),
+                yaxis=dict(showgrid=True, gridcolor="#222222", title="Index Level", zeroline=False),
+                showlegend=False
+            )
+            st.plotly_chart(fig_index, use_container_width=True)
+            
+        with chart_col2:
+            fig_monthly = go.Figure()
+            colors = ['#FF4136' if val < 0 else '#2ECC40' for val in monthly_returns['return']]
+            
+            fig_monthly.add_trace(go.Bar(
+                x=monthly_returns['year_month'],
+                y=monthly_returns['return'] * 100,
+                marker_color=colors,
+                text=[f"{val*100:+.1f}%" for val in monthly_returns['return']],
+                textposition='auto',
+                name="Monthly Return"
+            ))
+            
+            fig_monthly.update_layout(
+                title="Monthly MTM Returns",
+                template="plotly_dark",
+                paper_bgcolor="#1E1E1E",
+                plot_bgcolor="#1E1E1E",
+                margin=dict(l=20, r=20, t=40, b=20),
+                xaxis=dict(showgrid=False, title="", type='category'),
+                yaxis=dict(showgrid=True, gridcolor="#222222", title="Return (%)", zeroline=True, zerolinecolor="white"),
+                showlegend=False
+            )
+            st.plotly_chart(fig_monthly, use_container_width=True)
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df_index['date'], 
+            y=df_index['index_level'],
+            mode='lines',
+            line=dict(color='#FFD700', width=3),
+            name="OSRS 100"
+        ))
+        
+        fig.update_layout(
+            title="OSRS 100 Daily Index Level",
+            template="plotly_dark",
+            paper_bgcolor="#1E1E1E",
+            plot_bgcolor="#1E1E1E",
+            margin=dict(l=20, r=20, t=40, b=20),
+            xaxis=dict(showgrid=True, gridcolor="#222222", title=""),
+            yaxis=dict(showgrid=True, gridcolor="#222222", title="")
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        st.subheader(f"Current Constituents (Rebalanced: {latest_rebal.strftime('%Y-%m-%d')})")
+        
+        active_latest = df_latest[df_latest['status'] != 'DROP'].sort_values(by='weight', ascending=False).copy()
+        top_20 = active_latest.head(20)
+        
+        # Concentration metrics
+        top_5_weight = active_latest.head(5)['weight'].sum()
+        top_10_weight = active_latest.head(10)['weight'].sum()
+        
+        col_bar, col_metrics = st.columns([3, 1])
+        
+        with col_bar:
+            fig_bar = go.Figure(data=[go.Bar(
+                x=top_20['item_name'],
+                y=top_20['weight'] * 100,
+                marker_color='#00FF00',
+                text=[f"{w*100:.1f}%" for w in top_20['weight']],
+                textposition='auto'
+            )])
+            
+            fig_bar.update_layout(
+                title="Top 20 Constituents by Weight",
+                template="plotly_dark",
+                paper_bgcolor="#1E1E1E",
+                plot_bgcolor="#1E1E1E",
+                yaxis_title="Weight (%)",
+                xaxis_tickangle=-45,
+                margin=dict(t=40, b=100)
+            )
+            
+            st.plotly_chart(fig_bar, use_container_width=True)
+            
+        with col_metrics:
+            st.markdown("### Concentration")
+            st.metric("Top 5 Items", f"{top_5_weight*100:.1f}%")
+            st.metric("Top 10 Items", f"{top_10_weight*100:.1f}%")
+            st.markdown(f"**Single-Name Cap:** 8.0%")
+            
+            if not df_ad.empty:
+                latest_ads = df_ad[df_ad['rebalance_date'] == latest_rebal]
+                add_count = len(latest_ads[latest_ads['action'] == 'ADD'])
+                drop_count = len(latest_ads[latest_ads['action'] == 'DROP'])
+                st.markdown("### Turnover")
+                st.markdown(f"**Adds:** {add_count}")
+                st.markdown(f"**Drops:** {drop_count}")
+                
+        # FULL CONSTITUENTS TABLE
+        with st.expander("🔍 View Full OSRS 100 Constituent List"):
+            display_df = active_latest[['rank', 'item_name', 'item_id', 'weight']].copy()
+            display_df['weight'] = (display_df['weight'] * 100).map('{:.2f}%'.format)
+            display_df = display_df.rename(columns={
+                'rank': 'Rank (by Traded Value)',
+                'item_name': 'Item Name',
+                'item_id': 'Item ID',
+                'weight': 'Index Weight'
+            })
+            st.dataframe(display_df.set_index('Rank (by Traded Value)'), use_container_width=True)
+        
+        if not df_ad.empty:
+            st.markdown("---")
+            st.subheader("Latest Rebalance Adds & Drops")
+            
+            col_add, col_drop = st.columns(2)
+            
+            latest_ads = df_ad[df_ad['rebalance_date'] == latest_rebal]
+            ad_adds = latest_ads[latest_ads['action'] == 'ADD'][['item_name', 'new_weight', 'reason']].copy()
+            ad_drops = latest_ads[latest_ads['action'] == 'DROP'][['item_name', 'prior_weight', 'reason']].copy()
+            
+            with col_add:
+                st.markdown("### 🟢 Adds")
+                if ad_adds.empty:
+                    st.write("No adds this month.")
+                else:
+                    ad_adds['new_weight'] = (ad_adds['new_weight'] * 100).map('{:.2f}%'.format)
+                    ad_adds = ad_adds.rename(columns={'item_name': 'Item', 'new_weight': 'New Weight', 'reason': 'Reason'})
+                    st.dataframe(ad_adds, use_container_width=True, hide_index=True)
+                    
+            with col_drop:
+                st.markdown("### 🔴 Drops")
+                if ad_drops.empty:
+                    st.write("No drops this month.")
+                else:
+                    ad_drops['prior_weight'] = (ad_drops['prior_weight'] * 100).map('{:.2f}%'.format)
+                    ad_drops = ad_drops.rename(columns={'item_name': 'Item', 'prior_weight': 'Prior Weight', 'reason': 'Reason'})
+                    st.dataframe(ad_drops, use_container_width=True, hide_index=True)
+                    
+        # DIAGNOSTICS & EXCLUSIONS
+        try:
+            df_diag = pd.read_csv("market_data/osrs_100_diagnostics.csv")
+            df_diag['rebalance_date'] = pd.to_datetime(df_diag['rebalance_date'])
+            latest_diag = df_diag[df_diag['rebalance_date'] == latest_rebal]
+            
+            if not latest_diag.empty:
+                st.markdown("---")
+                with st.expander("🩺 Eligibility Diagnostics (Latest Rebalance Universe)"):
+                    diag_cols = st.columns(3)
+                    diag_cols[0].metric("Candidate Universe", len(latest_diag))
+                    diag_cols[1].metric("Eligible Items", len(latest_diag[latest_diag['eligible']==True]))
+                    diag_cols[2].metric("Ineligible Items", len(latest_diag[latest_diag['eligible']==False]))
+                    
+                    st.markdown("##### Ineligible Universe & Reasons")
+                    ineligibles = latest_diag[latest_diag['eligible'] == False].copy()
+                    if ineligibles.empty:
+                        st.write("No ineligible items flagged in the candidate universe.")
+                    else:
+                        ineligibles = ineligibles[['item_name', 'priced_days', 'volume_days', 'exclusion_reason']].sort_values(by='priced_days', ascending=False)
+                        st.dataframe(ineligibles, use_container_width=True, hide_index=True)
+        except:
+            pass
+        
+        st.markdown("---")
+        with st.expander("📖 Methodology & Interpretation"):
+            st.markdown("""
+            ### The OSRS 100 Benchmark
+            The OSRS 100 is an economic barometer designed to conceptually mimic real-world indices like the S&P 500, but applied to the Grand Exchange. It provides a daily snapshot of the broader Old School RuneScape economy.
+            
+            *History spans back to early 2026, anchoring daily prices against a base level of 1000.*
+
+            ### Methodology
+            - **Universe & Eligibility:** Items are eligible if they traded for at least 45 out of the last 60 days with meaningful consistent volume.
+            - **Selection:** The top 100 eligible items are selected based on their **Average Daily Traded GP Value** (Fair Price × Volume) over the trailing 60 days.
+            - **Weighting Basis (Not Market Cap!):** Because there is no concept of "shares outstanding" or "circulating supply" in OSRS, we cannot use true Market Cap. Instead, we use Trailing Traded Value as our proxy for economic importance.
+            - **Normalization:** Constituents are weighted by the **square root** of their traded value. This dampens hyper-volume items (like Fire Runes or Zulrah Scales) from absorbing 99% of the index.
+            - **Capping:** No single item can ever exceed an **8.0%** weight. Any excess weight is redistributed proportionally.
+            - **Rebalancing:** The index resets its weights, identifies drops, and promotes adds strictly on the 1st of every month holding index continuity constant across the barrier.
+
+            ### Known Limitations
+            - **No Sector Caps:** The `items.csv` catalog lacks structured item typologies (e.g., "Armor", "Runes", "Supplies"). Therefore, we cannot enforce standard sector maximums (e.g. 25% max category caps).
+            - **Pricing Anchors:** Daily prices are computed using an aggregated VWAP (Volume Weighted Average Price) of hourly snapshots. Gaps in pricing are carried forward for up to 3 days before an item is considered completely stale.
+            """)
+            
+    except Exception as e:
+        st.error(f"Waiting for index data to generate... ({e})")

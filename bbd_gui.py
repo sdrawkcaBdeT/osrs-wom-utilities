@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 import keyboard
 import requests
 import time
+import threading
+import queue
 
 # Safely import the drop table so we can calculate theoreticals
 try:
@@ -49,6 +51,7 @@ class BBDGUI:
         self.item_map = {}
         self.prices = {}
         self.gpph_data =[]
+        self.last_snapshot_mtime = 0.0 # Cache for O(1) checking
         
         # Load Data Ecosystem
         self.load_items_and_prices()
@@ -106,17 +109,36 @@ class BBDGUI:
 
         # --- WINDOW 9: LIVE TICK MATRIX ---
         # Starts 4px to the right of the RNG Tracker window (which is 250px wide) at x + 2 + 250 + 4
-        self.win_ticks = OverlayWindow(self.root, 258, 62, SIDE_ORIGIN_X + 256, SIDE_ORIGIN_Y + 218, "Tick Visualizer")
-        
+        self.win_ticks = OverlayWindow(self.root, 258, 62, SIDE_ORIGIN_X + 256, SIDE_ORIGIN_Y + 218, "Dual View Matrix")
+
+        # --- WINDOW 10: THE MEGAVAULT CLUSTER ---
+        # Option A Geometry: 4 Vaults, Single Row. Width: 139px, Height: 36px
+        self.win_vaults = OverlayWindow(self.root, 139, 39, SIDE_ORIGIN_X + 379, SIDE_ORIGIN_Y + 53, "Vault Cluster")
+
+        self.current_view = "Matrix"
         self.tick_history = []
-        self.last_tick_ts = time.time()
-        self.sync_attack_ts = 0.0
-        self.ticks_since_attack = 0
+        self.last_tick_processed = None
+        self.cooldown_remaining = 0
+        
+        # --- PHASE 4 ECONOMY ---
+        self.gp_backlog = 0
+        self.vault_gp = 0
+        self.last_total_profit = 0
+        
+        # --- PHASE 5 DRAIN SEQUENCE ---
+        self.is_draining = False
+        self.drain_index = 0
+        self.was_session_running = False  # Tracks when to flush the vaults
         
         # Initial Draw
         self.refresh_all()
 
+        # Start HTTP Polling Daemon
+        self.http_queue = queue.Queue()
+        threading.Thread(target=self.http_polling_daemon, daemon=True).start()
+
         # Hotkeys
+        keyboard.add_hotkey("ctrl+l", self.toggle_view)
         keyboard.add_hotkey("ctrl+up", self.increment_session)
         keyboard.add_hotkey("ctrl+down", self.decrement_session)
         keyboard.add_hotkey("ctrl+r", self.refresh_all)
@@ -130,58 +152,182 @@ class BBDGUI:
     def start_tick_loop(self):
         self.root.after(50, self.run_tick_loop)
 
-    def run_tick_loop(self):
-        now = time.time()
-        
-        try:
-            resp = requests.get("http://127.0.0.1:5000/hp", timeout=0.05)
-            data = resp.json()
-            server_phase = data.get("phase", "IDLE")
-            server_attack_ts = data.get("last_attack", 0.0)
-        except Exception:
-            server_phase = "IDLE"
-            server_attack_ts = 0.0
+    def toggle_view(self):
+        if self.current_view == "Matrix":
+            self.current_view = "Gold"
+        else:
+            self.current_view = "Matrix"
+        self.refresh_all()
 
-        if server_attack_ts > self.sync_attack_ts:
-            self.sync_attack_ts = server_attack_ts
-            self.last_tick_ts = now 
-            self.push_tick(True, server_phase)
-        
-        elif now - self.last_tick_ts >= 0.600:
-            self.last_tick_ts += 0.600
-            if now - self.last_tick_ts >= 0.600:
-                self.last_tick_ts = now
-            self.push_tick(False, server_phase)
-            
+    def http_polling_daemon(self):
+        while True:
+            try:
+                # Fast timeout so the thread doesn't hang if the server drops
+                resp = requests.get("http://127.0.0.1:5000/hp", timeout=0.1)
+                self.http_queue.put(resp.json())
+            except Exception:
+                pass
+            time.sleep(0.05) # ~20Hz polling rate
+
+    def run_tick_loop(self):
+        data = None
+        try:
+            # Drain the queue to grab only the absolute freshest state
+            while True:
+                data = self.http_queue.get_nowait()
+        except queue.Empty:
+            pass
+
+        if data:
+            # --- PHASE 5/6: PIPELINE FLUSH LOGIC ---
+            is_running = data.get("session_running", False)
+            if is_running and not self.was_session_running:
+                # A new session just started. 
+                self.vault_gp = 0
+                self.gp_backlog = 0 
+                
+                # CRITICAL FIX: Sync the high-water mark so new gold flows
+                self.last_total_profit = data.get("total_profit", 0) 
+                
+                # Wipe the physical conveyor belt clean for the new run
+                self.tick_history.clear() 
+                
+                self.draw_ticks()
+                self.draw_vaults()
+            self.was_session_running = is_running
+
+            # 1. Check for the End Session Handshake
+            if data.get("drain_triggered") and not self.is_draining:
+                self.start_drain_sequence()
+                
+            # 2. If we are actively draining, halt all normal matrix progression
+            # 2. If we are actively draining, halt all normal matrix progression
+            if not self.is_draining:
+                total_profit = data.get("total_profit", 0)
+                # Changed from > to != to allow negative deltas (expenses)
+                if total_profit != self.last_total_profit:
+                    self.gp_backlog += (total_profit - self.last_total_profit)
+                    self.last_total_profit = total_profit
+
+                # --- PHASE 6 FIX: Read the Rolling Stream ---
+                udp_stream = data.get("udp_stream", [])
+                server_phase = data.get("phase", "IDLE")
+
+                # Iterate through the entire buffer of recent ticks
+                for udp_payload in udp_stream:
+                    tick = udp_payload.get("tick")
+                    state = udp_payload.get("state", "idle")
+
+                    # --- The Matrix Bouncer ---
+                    if tick is not None:
+                        if self.last_tick_processed is None:
+                            self.last_tick_processed = tick - 1
+
+                        # ONLY process if this tick is newer than our matrix timeline
+                        if tick > self.last_tick_processed:
+                            # If we STILL have a gap here, it's a true network drop
+                            missed = tick - self.last_tick_processed - 1
+                            for _ in range(missed):
+                                self.push_tick("#333333", False)
+
+                            if state == "attack":
+                                self.cooldown_remaining = 4
+                                self.push_tick("#00FFFF", True)
+                            else:
+                                if self.cooldown_remaining > 0:
+                                    self.cooldown_remaining -= 1
+                                    self.push_tick("#00FF00", False)
+                                else:
+                                    if state == "away" or server_phase == "AWAY":
+                                        self.push_tick("#FFFF00", False)
+                                    else:
+                                        self.push_tick("#FF0000", False)
+                            
+                            self.last_tick_processed = tick
+
         self.root.after(50, self.run_tick_loop)
 
-    def push_tick(self, is_attack, phase):
-        if phase != "KILLING":
-            self.ticks_since_attack = 0
-            
-        if is_attack:
-            self.ticks_since_attack = 0
-            color = "#00FFFF" # Cyan for the initial shot to make it stand out
-        else:
-            self.ticks_since_attack += 1
-            if phase == "KILLING":
-                if self.ticks_since_attack < 5:
-                    color = "#00FF00" 
-                else:
-                    color = "#FF0000" 
-            elif phase in ["AWAY", "IDLE"]:
-                color = "#FFFF00"
-            else:
-                color = "#444444"
+    def start_drain_sequence(self):
+        self.is_draining = True
+        # Because we insert(0), index len-1 is the oldest tick closest to the vault
+        self.drain_index = len(self.tick_history) - 1 
+        self.run_drain_sweep()
 
-        self.tick_history.insert(0, {"color": color, "is_attack": is_attack})
+    def run_drain_sweep(self):
+        if self.drain_index >= 0:
+            # Fast-forward extract GP from the tick
+            tick = self.tick_history[self.drain_index]
+            gp = tick.get("gp", 0)
+            if gp > 0:
+                self.vault_gp += gp
+                tick["gp"] = 0 # Visually erase the gold from the belt
+                self.draw_ticks()
+                self.draw_vaults()
+            
+            # Move backwards towards the start of the conveyor
+            self.drain_index -= 1
+            self.root.after(20, self.run_drain_sweep) # 20ms rapid sweep
+        else:
+            # Array swept. Dump any remaining raw backlog directly into the vault.
+            if self.gp_backlog > 0:
+                self.vault_gp += self.gp_backlog
+                
+            final_gp = self.vault_gp
+            
+            # Fire the resolution callback to Flask to trigger the save
+            try:
+                payload = {"event": "drain_complete", "payload": {"final_vault_gp": final_gp}}
+                requests.post("http://127.0.0.1:5000/event", json=payload, timeout=0.1)
+            except Exception:
+                pass
+                
+            # Safely reset the pipeline flags, but LEAVE self.vault_gp intact
+            self.gp_backlog = 0
+            self.last_total_profit = 0
+            self.is_draining = False
+            
+            # (No draw_vaults() call here, so the gold lingers on the screen)
+
+    def push_tick(self, color, is_attack):
+        # --- PHASE 6: 1k CAP & ANTIMATTER ---
+        # A 7x7 tick holds exactly 49,000 GP. Route positive or negative amounts.
+        if self.gp_backlog > 0:
+            gp_to_attach = min(self.gp_backlog, 49000)
+        elif self.gp_backlog < 0:
+            gp_to_attach = max(self.gp_backlog, -49000)
+        else:
+            gp_to_attach = 0
+            
+        self.gp_backlog -= gp_to_attach
+
+        # INSERT at index 0 (Top-Left) to push older ticks to the right
+        self.tick_history.insert(0, {"color": color, "is_attack": is_attack, "gp": gp_to_attach})
+        
+        # POP from the end (Bottom-Right) when it falls off the conveyor
         if len(self.tick_history) > 217:
-            self.tick_history = self.tick_history[:217]
+            dropped_tick = self.tick_history.pop()
+            self.vault_gp += dropped_tick.get("gp", 0)
+            
+            # Floor the vault at 0 to prevent negative rendering artifacts
+            if self.vault_gp < 0: self.vault_gp = 0 
+            
+            self.draw_vaults() # Force redraw on physical drop
             
         self.draw_ticks()
 
     # --- DATA PIPELINE ---
     def load_items_and_prices(self):
+        snapshot_dir = "price_snapshots"
+        
+        # O(1) Mtime check: If the directory hasn't changed, skip parsing.
+        if os.path.exists(snapshot_dir):
+            current_mtime = os.path.getmtime(snapshot_dir)
+            if current_mtime == self.last_snapshot_mtime and self.prices:
+                return # Fast exit: No new snapshots detected
+            
+            self.last_snapshot_mtime = current_mtime
+
+        print("[I/O] Parsing items.csv and snapshot directory...") # Verification print
         self.item_map.clear()
         self.prices.clear()
         
@@ -195,7 +341,6 @@ class BBDGUI:
                     }
         
         # 2. Load latest Wiki Snapshot
-        snapshot_dir = "price_snapshots"
         if os.path.exists(snapshot_dir):
             files = glob.glob(os.path.join(snapshot_dir, "prices_*.csv"))
             if files:
@@ -810,29 +955,95 @@ class BBDGUI:
         self.draw_waffle()
         self.draw_telemetry()
         self.draw_ticks()
+        self.draw_vaults()
 
     def draw_ticks(self):
         c = self.win_ticks.canvas
         c.delete("all")
+        
         start_x, start_y = 5, 3
         cols, rows = 31, 7
         cell_w, cell_h = 8, 8
         
-        for i, tick in enumerate(self.tick_history):
+        for i in range(217):
             r = i // cols
             col = i % cols
             x = start_x + (col * cell_w)
             y = start_y + (r * cell_h)
             
-            # Draw a solid 5x5 cell block using the core color
-            c.create_rectangle(x+1, y+1, x+6, y+6, fill=tick['color'], outline="")
+            if i < len(self.tick_history):
+                tick = self.tick_history[i]
+                
+                if self.current_view == "Matrix":
+                    # View A: Solid Combat States
+                    c.create_rectangle(x, y, x+7, y+7, fill=tick['color'], outline="")
+                    if tick['is_attack']:
+                        c.create_line(x+6, y, x+6, y+7, fill="white")
+                
+                elif self.current_view == "Gold":
+                    # View B: The Gold Conveyor
+                    if tick['color'] == "#333333":
+                        # Dropped tick: A literal gap in the conveyor belt
+                        c.create_rectangle(x, y, x+7, y+7, fill="black", outline="")
+                    else:
+                        # Valid empty tick: The dark grey rubber belt
+                        c.create_rectangle(x, y, x+7, y+7, fill="#1c1c1c", outline="")
+                    
+                    # --- PHASE 6: RED/YELLOW RENDERER (OPTIMIZED) ---
+                    gp = tick.get("gp", 0)
+                    if gp != 0:
+                        # 1k = 1 Pixel scale. Cap at 49 pixels per tick.
+                        px_count = min(int(abs(gp) // 1000), 49)
+                        px_color = "#FFD700" if gp > 0 else "#FF4444"
+                        
+                        full_rows = px_count // 7
+                        remainder = px_count % 7
+                        
+                        # 1. Draw all full horizontal rows as ONE single rectangle
+                        if full_rows > 0:
+                            # Bottom-up math
+                            c.create_rectangle(x, y + 7 - full_rows, x + 7, y + 7, fill=px_color, outline="")
+                            
+                        # 2. Draw the partial remainder row on top
+                        if remainder > 0:
+                            rem_y = y + 7 - full_rows - 1
+                            c.create_rectangle(x, rem_y, x + remainder, rem_y + 1, fill=px_color, outline="")
+            else:
+                c.create_rectangle(x, y, x+7, y+7, fill="#1c1c1c", outline="")
+
+    def draw_vaults(self):
+        c = self.win_vaults.canvas
+        c.delete("all")
+        
+        # 1k per pixel rescale. 1 Megapixel = 1,024,000 GP
+        total_pixels = int(self.vault_gp // 1000)
+        
+        # Option A: 4 vaults, single horizontal row
+        vault_coords = [(2, 2), (36, 2), (70, 2), (104, 2)]
+        
+        for idx, (x, y) in enumerate(vault_coords):
+            pixels = min(max(total_pixels - idx * 1024, 0), 1024)
+            border_color = "#8B6508" if pixels == 1024 else "#222222"
             
-            if tick['is_attack']:
-                # Distinct White Initiation Line on the right margin
-                c.create_line(x+7, y, x+7, y+8, fill="white")
+            # Outer 34x34 structural border
+            c.create_rectangle(x, y, x+34, y+34, fill=border_color, outline="")
+            # Inner 32x32 black core
+            c.create_rectangle(x+1, y+1, x+33, y+33, fill="black", outline="")
+            
+            if pixels > 0:
+                full_rows = pixels // 32
+                remainder = pixels % 32
+                
+                if full_rows > 0:
+                    c.create_rectangle(x+1, y+33-full_rows, x+33, y+33, fill="#FFD700", outline="")
+                
+                if remainder > 0:
+                    rem_y = y + 32 - full_rows
+                    # Draw partial row left-to-right
+                    c.create_rectangle(x+1, rem_y, x+1+remainder, rem_y+1, fill="#FFD700", outline="")
 
     def start_auto_refresh(self):
-        self.root.after(5000, self.run_auto_refresh)
+        self.root.after(30000, self.run_auto_refresh)
 
     def run_auto_refresh(self):
         self.refresh_all()

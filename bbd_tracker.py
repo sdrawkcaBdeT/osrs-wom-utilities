@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import threading
+import queue
 from flask import Flask, request, jsonify
 import datetime
 import json
@@ -10,6 +11,11 @@ from scipy.stats import binom
 from census_manager import CensusManager 
 import pygame
 import sqlite3
+import socket
+import logging
+
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 # --- CONFIG ---
 HOST = '127.0.0.1'
@@ -145,6 +151,13 @@ def init_telemetry_db():
     c.execute('''CREATE TABLE IF NOT EXISTS hitsplats (
             id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT,
             timestamp DATETIME, damage INTEGER, dragon_hp_before INTEGER)''')
+            
+    # --- PHASE 5: SESSION PERSISTENCE ---
+    c.execute('''CREATE TABLE IF NOT EXISTS sessions (
+            session_id TEXT PRIMARY KEY, start_time DATETIME, end_time DATETIME,
+            duration_sec REAL, active_sec REAL, total_attacks INTEGER, 
+            total_kills INTEGER, net_profit INTEGER)''')
+            
     conn.commit()
     conn.close()
 
@@ -175,7 +188,10 @@ def handle_event():
 
     # --- HP UPDATE CATCH ---
     if ev_type == 'hp_update':
-        LIVE_HP_STATE.update(payload)
+        # Explicit whitelist to prevent Java payloads from overwriting the economy
+        for k in ['current', 'max', 'active']:
+            if k in payload:
+                LIVE_HP_STATE[k] = payload[k]
 
     # --- AUDIO TRIGGER ---
     if ev_type == 'notification':
@@ -183,6 +199,14 @@ def handle_event():
             if kill_sound:
                 kill_sound.play()
                 print("[AUDIO] Playing Kill Sound")
+
+    # --- END SESSION HANDSHAKE ---
+    if ev_type == 'drain_complete':
+        if app_instance and app_instance.is_active:
+            final_gp = payload.get("final_vault_gp", 0)
+            # Route back to main Tkinter thread to finalize the save with the GP payload
+            app_instance.after(0, lambda: app_instance.finalize_stop(final_gp))
+        return jsonify({"status": "ok"})
     
     if app_instance:
         app_instance.process_event(ev_type, payload)
@@ -190,10 +214,36 @@ def handle_event():
 
 @server.route('/hp', methods=['GET'])
 def get_hp():
+    # Inject the master control panel's active state into the payload
+    if app_instance:
+        LIVE_HP_STATE["session_running"] = app_instance.is_active
     return jsonify(LIVE_HP_STATE)
 
 def run_server():
     server.run(host=HOST, port=PORT, debug=False, use_reloader=False)
+
+# --- UDP LISTENER (PHASE 1) ---
+UDP_HOST = '127.0.0.1'
+UDP_PORT = 5005
+udp_queue = queue.Queue()
+
+def start_udp_listener():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind((UDP_HOST, UDP_PORT))
+    print(f"[UDP] Shadow Listener active on port {UDP_PORT}")
+
+    while True:
+        try:
+            data, addr = sock.recvfrom(4096)
+            message = data.decode('utf-8')
+            payload = json.loads(message)
+            
+            udp_queue.put(payload)
+            
+            # Print strictly to console to verify the pipe is working
+            print(f"[UDP] {payload}")
+        except Exception as e:
+            print(f"[UDP Error] {e}")
 
 # --- UI COMPONENT: COLLAPSIBLE FRAME ---
 class CollapsibleFrame(ctk.CTkFrame):
@@ -247,11 +297,41 @@ class BBDTrackerApp(ctk.CTk):
 
         self.setup_ui()
         self.update_timer()
+        self.start_ui_refresh_loop()
 
         self.dps_profiles = self.load_dps_profiles()
         self.check_dps_profile()
         
         threading.Thread(target=run_server, daemon=True).start()
+        threading.Thread(target=start_udp_listener, daemon=True).start()
+
+        self.process_udp_queue()
+
+    def process_udp_queue(self):
+        try:
+            while True:
+                payload = udp_queue.get_nowait()
+                if payload.get("event") == "net_profit_delta":
+                    # --- PHASE 6: THE IRON GATE ---
+                    # Only accept GP packets if the session is currently active
+                    if self.is_active:
+                        val = payload.get("value", 0)
+                        LIVE_HP_STATE["total_profit"] = LIVE_HP_STATE.get("total_profit", 0) + val
+                        print(f"[ECONOMY] Rx Drop: {val:,} GP | New Total: {LIVE_HP_STATE['total_profit']:,} GP")
+                else:
+                    # --- THE ROLLING STREAM ---
+                    # Get the current stream, or initialize an empty list
+                    stream = LIVE_HP_STATE.get("udp_stream", [])
+                    stream.append(payload)
+                    
+                    # Cap the memory buffer at 50 ticks (30 seconds of history)
+                    if len(stream) > 50:
+                        stream.pop(0)
+                        
+                    LIVE_HP_STATE["udp_stream"] = stream
+        except queue.Empty:
+            pass
+        self.after(50, self.process_udp_queue)
 
     def setup_ui(self):
         self.grid_columnconfigure(0, weight=1) 
@@ -597,8 +677,18 @@ class BBDTrackerApp(ctk.CTk):
         self.kill_count = 0
         self.loot_tracker = {}
         self.event_log = []
+        
+        # --- PHASE 6 FIX: Force initial transit state & economy reset ---
+        self.current_phase = "AWAY"
+        LIVE_HP_STATE["phase"] = "AWAY"
+        
+        # Hard-reset the economy accumulators so we always start clean
+        LIVE_HP_STATE["total_profit"] = 0 
+        LIVE_HP_STATE["udp_stream"] = []
+        
+        self.lbl_phase.configure(text="AWAY", text_color="gray")
         self.session_id = f"session_{int(self.start_time)}"
-        self.sighting_cache = {} 
+        self.sighting_cache = {}
         
         self.attack_count = 0
         self.active_seconds_bank = 0.0
@@ -619,12 +709,48 @@ class BBDTrackerApp(ctk.CTk):
 
     def stop_session(self):
         if not self.is_active: return
-        self.is_active = False
-        self.btn_start.configure(state="normal")
-        self.btn_stop.configure(state="disabled")
+        
+        # 1. Lock the UI and initiate the drain
+        self.btn_stop.configure(state="disabled", text="⏳ DRAINING...")
         self.btn_manual_kill.configure(state="disabled", fg_color="#333")
         
-        self.log_event("session_end", "Session Ended")
+        # Signal the GUI overlay to begin the sweep
+        global LIVE_HP_STATE
+        LIVE_HP_STATE["drain_triggered"] = True
+        self.log_event("system", "Initiating Conveyor Drain...")
+
+    def finalize_stop(self, final_vault_gp=0):
+        # 2. Execute the save once the GUI confirms the vaults are full
+        self.is_active = False
+        self.btn_start.configure(state="normal")
+        self.btn_stop.configure(state="disabled", text="⏹ STOP & SAVE")
+        
+        global LIVE_HP_STATE
+        LIVE_HP_STATE["drain_triggered"] = False 
+        LIVE_HP_STATE["total_profit"] = 0 # Reset Flask accumulator for next session
+        
+        # --- PHASE 5: SQLITE PERSISTENCE ---
+        end_time = time.time()
+        duration_sec = end_time - self.start_time if self.start_time else 0
+        
+        try:
+            conn = sqlite3.connect('combat_telemetry.db')
+            c = conn.cursor()
+            c.execute("""INSERT INTO sessions (session_id, start_time, end_time, duration_sec, active_sec, total_attacks, total_kills, net_profit)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                      (self.session_id, datetime.datetime.fromtimestamp(self.start_time).isoformat(), 
+                       datetime.datetime.fromtimestamp(end_time).isoformat(), duration_sec, 
+                       self.active_seconds_bank, self.attack_count, self.kill_count, final_vault_gp))
+            conn.commit()
+            conn.close()
+            self.log_event("system", f"SQLite Vault Saved: {final_vault_gp:,} GP")
+        except Exception as e:
+            self.log_event("error", f"SQLite Save Failed: {e}")
+
+        # Inject final GP into the JSON payload before saving
+        self.loot_tracker["_final_net_profit"] = final_vault_gp
+        
+        self.log_event("session_end", "Session Ended (Conveyor Swept)")
         self.save_data()
         self.refresh_all_tables()
 
@@ -715,6 +841,11 @@ class BBDTrackerApp(ctk.CTk):
             if elapsed > 0:
                 self.lbl_kph.configure(text=f"{(self.kill_count / (elapsed/3600)):.2f}")
         self.after(1000, self.update_timer)
+
+    def start_ui_refresh_loop(self):
+        if self.is_active:
+            self.refresh_all_tables()
+        self.after(3000, self.start_ui_refresh_loop) # Throttle teardown to every 3 seconds
 
     def add_loot(self, item_name, qty):
         self.loot_tracker[item_name] = self.loot_tracker.get(item_name, 0) + qty
@@ -842,8 +973,6 @@ class BBDTrackerApp(ctk.CTk):
                 if name not in ["Dragon bones", "Black dragonhide"]:
                     self.add_loot(name, qty)
                     self.log_event("loot", f"-> {qty}x {name}")
-        
-        self.refresh_all_tables()
 
     def process_event(self, event_type, payload):
         if not self.is_active: return
@@ -885,7 +1014,6 @@ class BBDTrackerApp(ctk.CTk):
             )
             
             if result:
-                self.refresh_census()
                 if result['roster_status'] == 'NEW':
                     self.log_event("census", f"New Player: {payload['name']}")
 
