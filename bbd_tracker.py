@@ -670,6 +670,7 @@ class BBDTrackerApp(ctk.CTk):
             except: pass
         return None
 
+
     # --- LOGIC ---
     def start_session(self):
         self.is_active = True

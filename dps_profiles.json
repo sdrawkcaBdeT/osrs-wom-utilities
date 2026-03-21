@@ -158,5 +158,15 @@
         "rng_str": 130.0,
         "rng_acc": 226.0,
         "pray_bonus": 19.0
+    },
+    "Dragon hunter crossbow_Diamond bolts (e)_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Devout Boots_Ring of the gods (i)_Rigour": {
+        "max_hit": 63.0,
+        "exp_hit": 23.5,
+        "dps": 7.833,
+        "ttk": 42.6,
+        "accuracy": 82.16,
+        "rng_str": 132.0,
+        "rng_acc": 236.0,
+        "pray_bonus": 19.0
     }
 }

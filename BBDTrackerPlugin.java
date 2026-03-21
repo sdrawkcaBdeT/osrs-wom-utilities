@@ -25,6 +25,7 @@ import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import net.runelite.api.widgets.Widget;
 
 @PluginDescriptor(name = "BBD Tracker")
 public class BBDTrackerPlugin extends Plugin {
@@ -65,8 +66,10 @@ public class BBDTrackerPlugin extends Plugin {
 
     private Object gpPerHourPluginInstance = null;
     private Method getTotalGpMethod = null;
+    private Method getStateMethod = null;
     private long previousNetTotal = 0;
     private boolean isFirstCalculation = true;
+    private boolean wasBanking = false;
     private boolean nextTickIsAttack = false;
     private long tickCount = 0;
 
@@ -134,22 +137,39 @@ public class BBDTrackerPlugin extends Plugin {
                     gpPerHourPluginInstance = p;
                     try {
                         getTotalGpMethod = p.getClass().getMethod("getTotalGp");
+                        getStateMethod = p.getClass().getMethod("getState");
                     } catch (Exception e) {
-                        // Fails silently if method is unavailable
+                        System.out.println("[BBD] Failed to hook GP-Per-Hour methods: " + e.getMessage());
                     }
                     break;
                 }
             }
         }
 
-        if (gpPerHourPluginInstance != null && getTotalGpMethod != null) {
+        if (gpPerHourPluginInstance != null && getTotalGpMethod != null && getStateMethod != null) {
             try {
                 long currentNetTotal = (Long) getTotalGpMethod.invoke(gpPerHourPluginInstance);
+                Object stateObj = getStateMethod.invoke(gpPerHourPluginInstance);
+
+                // If gp-per-hour says we are banking, we are banking.
+                boolean currentlyBanking = stateObj != null && stateObj.toString().equals("BANK");
 
                 if (isFirstCalculation) {
                     previousNetTotal = currentNetTotal;
                     isFirstCalculation = false;
+                    wasBanking = currentlyBanking;
+                } else if (currentlyBanking) {
+                    // --- THE SNAPSHOT MUTE ---
+                    previousNetTotal = currentNetTotal;
+                    wasBanking = true;
+                } else if (wasBanking) {
+                    // --- THE TRANSITION SHOCK ABSORBER ---
+                    // We just closed the bank this exact tick.
+                    // Absorb the +350M gear value returning without firing a delta.
+                    previousNetTotal = currentNetTotal;
+                    wasBanking = false;
                 } else if (currentNetTotal != previousNetTotal) {
+                    // --- ACTIVE LEDGER ---
                     long delta = currentNetTotal - previousNetTotal;
 
                     if (delta != 0) {
@@ -159,7 +179,9 @@ public class BBDTrackerPlugin extends Plugin {
                     previousNetTotal = currentNetTotal;
                 }
             } catch (Exception e) {
-                // Fail silently so we don't crash the game tick
+                // Expose the Silent Assassin to the console
+                System.out.println("[BBD] Phantom Read Exception: " + e.getMessage());
+                e.printStackTrace();
             }
         }
 
