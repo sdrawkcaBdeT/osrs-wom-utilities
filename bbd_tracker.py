@@ -143,7 +143,17 @@ ITEM_MAP = {
 server = Flask(__name__)
 app_instance = None 
 
-LIVE_HP_STATE = {"current": 0, "max": 315, "active": False, "phase": "IDLE", "last_attack": 0}
+LIVE_HP_STATE = {
+    "current": 0, 
+    "max": 315, 
+    "active": False, 
+    "phase": "IDLE", 
+    "last_attack": 0,
+    "udp_stream": [],
+    "total_profit": 0,
+    "drain_triggered": False,
+    "session_running": False
+}
 
 def init_telemetry_db():
     conn = sqlite3.connect('combat_telemetry.db')
@@ -152,11 +162,17 @@ def init_telemetry_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT,
             timestamp DATETIME, damage INTEGER, dragon_hp_before INTEGER)''')
             
-    # --- PHASE 5: SESSION PERSISTENCE ---
     c.execute('''CREATE TABLE IF NOT EXISTS sessions (
             session_id TEXT PRIMARY KEY, start_time DATETIME, end_time DATETIME,
             duration_sec REAL, active_sec REAL, total_attacks INTEGER, 
             total_kills INTEGER, net_profit INTEGER)''')
+            
+    # --- ANALYTICS TABLES ---
+    c.execute('''CREATE TABLE IF NOT EXISTS combat_ticks (
+            session_id TEXT, tick_number INTEGER, state TEXT)''')
+            
+    c.execute('''CREATE TABLE IF NOT EXISTS profit_deltas (
+            session_id TEXT, tick_number INTEGER, delta_gp INTEGER)''')
             
     conn.commit()
     conn.close()
@@ -209,7 +225,8 @@ def handle_event():
         return jsonify({"status": "ok"})
     
     if app_instance:
-        app_instance.process_event(ev_type, payload)
+        # Safely route the event processing back to the main Tkinter thread
+        app_instance.after(0, lambda e=ev_type, p=payload: app_instance.process_event(e, p))
     return jsonify({"status": "ok"})
 
 @server.route('/hp', methods=['GET'])
@@ -294,6 +311,8 @@ class BBDTrackerApp(ctk.CTk):
         self.session_id = None
         self.img_cache = {}
         self.sighting_cache = {} 
+        self.session_tape = {}  
+        self.current_tick = 0
 
         self.setup_ui()
         self.update_timer()
@@ -311,15 +330,32 @@ class BBDTrackerApp(ctk.CTk):
         try:
             while True:
                 payload = udp_queue.get_nowait()
-                if payload.get("event") == "net_profit_delta":
-                    # --- PHASE 6: THE IRON GATE ---
-                    # Only accept GP packets if the session is currently active
-                    if self.is_active:
+                ev_type = payload.get("event")
+                
+                # --- PHASE 6: THE IRON GATE & RAM BUFFER ---
+                if self.is_active:
+                    if ev_type == "tick_heartbeat":
+                        self.current_tick = payload.get("tick", self.current_tick)
+                        state = payload.get("state", "idle")
+                        
+                        # Initialize or update the state
+                        if self.current_tick not in self.session_tape:
+                            self.session_tape[self.current_tick] = {"state": state, "gp": 0}
+                        else:
+                            self.session_tape[self.current_tick]["state"] = state
+                            
+                    elif ev_type == "net_profit_delta":
                         val = payload.get("value", 0)
                         LIVE_HP_STATE["total_profit"] = LIVE_HP_STATE.get("total_profit", 0) + val
                         print(f"[ECONOMY] Rx Drop: {val:,} GP | New Total: {LIVE_HP_STATE['total_profit']:,} GP")
-                else:
-                    # --- THE ROLLING STREAM ---
+                        
+                        # Attach gold to the current tick (handling UDP race conditions)
+                        if self.current_tick not in self.session_tape:
+                            self.session_tape[self.current_tick] = {"state": "idle", "gp": 0}
+                        self.session_tape[self.current_tick]["gp"] += val
+
+                # --- THE ROLLING STREAM (For the Matrix UI) ---
+                if ev_type != "net_profit_delta":
                     # Get the current stream, or initialize an empty list
                     stream = LIVE_HP_STATE.get("udp_stream", [])
                     stream.append(payload)
@@ -329,6 +365,7 @@ class BBDTrackerApp(ctk.CTk):
                         stream.pop(0)
                         
                     LIVE_HP_STATE["udp_stream"] = stream
+                    
         except queue.Empty:
             pass
         self.after(50, self.process_udp_queue)
@@ -678,6 +715,8 @@ class BBDTrackerApp(ctk.CTk):
         self.kill_count = 0
         self.loot_tracker = {}
         self.event_log = []
+        self.session_tape = {}  # Unified RAM buffer: {tick_num: {"state": "idle", "gp": 0}}
+        self.current_tick = 0
         
         # --- PHASE 6 FIX: Force initial transit state & economy reset ---
         self.current_phase = "AWAY"
@@ -742,6 +781,18 @@ class BBDTrackerApp(ctk.CTk):
                       (self.session_id, datetime.datetime.fromtimestamp(self.start_time).isoformat(), 
                        datetime.datetime.fromtimestamp(end_time).isoformat(), duration_sec, 
                        self.active_seconds_bank, self.attack_count, self.kill_count, final_vault_gp))
+            
+            # --- PARSE THE UNIFIED TAPE FOR SQLITE ---
+            tick_dump = []
+            profit_dump = []
+            for tick_num, data in self.session_tape.items():
+                tick_dump.append((self.session_id, tick_num, data["state"]))
+                if data["gp"] != 0:
+                    profit_dump.append((self.session_id, tick_num, data["gp"]))
+                    
+            c.executemany("INSERT INTO combat_ticks (session_id, tick_number, state) VALUES (?, ?, ?)", tick_dump)
+            c.executemany("INSERT INTO profit_deltas (session_id, tick_number, delta_gp) VALUES (?, ?, ?)", profit_dump)
+            
             conn.commit()
             conn.close()
             self.log_event("system", f"SQLite Vault Saved: {final_vault_gp:,} GP")
@@ -824,7 +875,8 @@ class BBDTrackerApp(ctk.CTk):
             "config": config_data,
             "theoretical_stats": theoretical_stats,
             "loot_summary": self.loot_tracker,
-            "event_timeline": self.event_log
+            "event_timeline": self.event_log,
+            "game_tape": self.session_tape
         }
         
         with open(f"{DATA_DIR}/{self.session_id}.json", 'w') as f:

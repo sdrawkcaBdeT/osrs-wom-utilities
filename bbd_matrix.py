@@ -150,8 +150,15 @@ class BBDMatrix:
         if self.drain_index >= 0:
             tick = self.tick_history[self.drain_index]
             gp = tick.get("gp", 0)
-            if gp > 0:
+            
+            # Catch both positive (yellow) and negative (red) pixels
+            if gp != 0:
                 self.vault_gp += gp
+                
+                # Prevent negative rendering artifacts during the sweep
+                if self.vault_gp < 0: 
+                    self.vault_gp = 0
+                    
                 tick["gp"] = 0 
                 self.draw_ticks()
                 self.draw_vaults()
