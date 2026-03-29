@@ -24,14 +24,17 @@
         "pray_restore": "Prayer Potions"
     },
     "theoretical_stats": {
-        "max_hit": 63.0,
+        "max_hit": 63,
         "exp_hit": 23.5,
         "dps": 7.833,
         "ttk": 42.6,
         "accuracy": 82.16,
         "rng_str": 132.0,
         "rng_acc": 236.0,
-        "pray_bonus": 19.0
+        "pray_bonus": 19.0,
+        "cttk": 43.0,
+        "cdps": 7.328,
+        "cexp_hit": 22.0
     },
     "loot_summary": {
         "Dragon bones": 54,

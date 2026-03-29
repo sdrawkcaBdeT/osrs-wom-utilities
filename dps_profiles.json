@@ -1,182 +1,236 @@
 {
     "Dragon hunter crossbow_Diamond bolts (e)_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ranging cape (t)_Pegasian boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 63.0,
-        "exp_hit": 23.6,
+        "max_hit": 63,
+        "exp_hit": 23.5,
         "dps": 7.852,
         "ttk": 42.5,
         "accuracy": 82.39,
         "rng_str": 130.0,
         "rng_acc": 240.0,
-        "pray_bonus": 18.0
+        "pray_bonus": 18.0,
+        "cttk": 42.9,
+        "cdps": 7.346,
+        "cexp_hit": 22.0
     },
     "Dragon hunter crossbow_Dragonstone bolts (e)_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ranging cape (t)_Pegasian boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 58.0,
-        "exp_hit": 23.9,
+        "max_hit": 66,
+        "exp_hit": 24.8,
         "dps": 7.969,
         "ttk": 41.9,
         "accuracy": 82.39,
         "rng_str": 142.0,
         "rng_acc": 240.0,
-        "pray_bonus": 18.0
+        "pray_bonus": 18.0,
+        "cttk": 40.8,
+        "cdps": 7.722,
+        "cexp_hit": 23.2
     },
     "Dragon hunter crossbow_Pearl dragon bolts (e)_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ranging cape (t)_Pegasian boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 67.0,
-        "exp_hit": 25.2,
+        "max_hit": 69,
+        "exp_hit": 25.7,
         "dps": 8.384,
         "ttk": 39.9,
         "accuracy": 82.39,
         "rng_str": 147.0,
         "rng_acc": 240.0,
-        "pray_bonus": 18.0
+        "pray_bonus": 18.0,
+        "cttk": 39.4,
+        "cdps": 7.987,
+        "cexp_hit": 24.0
     },
     "Dragon hunter crossbow_Diamond bolts (e)_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ranging cape (t)_Devout Boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 63.0,
+        "max_hit": 63,
         "exp_hit": 23.4,
         "dps": 7.793,
         "ttk": 42.8,
         "accuracy": 81.67,
         "rng_str": 130.0,
         "rng_acc": 228.0,
-        "pray_bonus": 23.0
+        "pray_bonus": 23.0,
+        "cttk": 43.2,
+        "cdps": 7.294,
+        "cexp_hit": 21.9
     },
     "Dragon hunter crossbow_Runite Bolts_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Devout Boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 58.0,
-        "exp_hit": 23.8,
+        "max_hit": 66,
+        "exp_hit": 24.7,
         "dps": 7.947,
         "ttk": 42.0,
         "accuracy": 82.16,
         "rng_str": 142.0,
         "rng_acc": 236.0,
-        "pray_bonus": 19.0
+        "pray_bonus": 19.0,
+        "cttk": 40.9,
+        "cdps": 7.704,
+        "cexp_hit": 23.1
     },
     "Dragon hunter crossbow_Runite Bolts_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ranging cape (t)_Devout Boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 57.0,
-        "exp_hit": 23.3,
+        "max_hit": 65,
+        "exp_hit": 24.2,
         "dps": 7.763,
         "ttk": 43.0,
         "accuracy": 81.67,
         "rng_str": 140.0,
         "rng_acc": 228.0,
-        "pray_bonus": 23.0
+        "pray_bonus": 23.0,
+        "cttk": 41.8,
+        "cdps": 7.538,
+        "cexp_hit": 22.6
     },
     "Dragon hunter crossbow_Runite Bolts_Saradomin coif_Saradomin d'hide body_Saradomin chaps_Saradomin bracers_Ranging cape (t)_Saradomin d'hide boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 55.0,
-        "exp_hit": 21.9,
+        "max_hit": 63,
+        "exp_hit": 22.9,
         "dps": 7.313,
         "ttk": 45.5,
         "accuracy": 79.73,
         "rng_str": 130.0,
         "rng_acc": 200.0,
-        "pray_bonus": 19.0
+        "pray_bonus": 19.0,
+        "cttk": 44.1,
+        "cdps": 7.138,
+        "cexp_hit": 21.4
     },
     "Dragon hunter crossbow_Runite Bolts_Saradomin coif_Saradomin d'hide body_Saradomin chaps_Saradomin bracers_Ava's assembler_Saradomin d'hide boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 55.0,
-        "exp_hit": 22.1,
+        "max_hit": 63,
+        "exp_hit": 23.0,
         "dps": 7.368,
         "ttk": 45.2,
         "accuracy": 80.32,
         "rng_str": 132.0,
         "rng_acc": 208.0,
-        "pray_bonus": 15.0
+        "pray_bonus": 15.0,
+        "cttk": 43.8,
+        "cdps": 7.185,
+        "cexp_hit": 21.6
     },
     "Dragon hunter crossbow_Runite Bolts_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Devout Boots_Archers ring (i)_Rigour": {
-        "max_hit": 58.0,
-        "exp_hit": 24.0,
+        "max_hit": 66,
+        "exp_hit": 24.9,
         "dps": 7.992,
         "ttk": 41.8,
         "accuracy": 82.62,
         "rng_str": 142.0,
         "rng_acc": 244.0,
-        "pray_bonus": 11.0
+        "pray_bonus": 11.0,
+        "cttk": 40.7,
+        "cdps": 7.744,
+        "cexp_hit": 23.2
     },
     "Dragon hunter crossbow_Diamond bolts (e)_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Pegasian boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 63.0,
+        "max_hit": 63,
         "exp_hit": 23.7,
         "dps": 7.89,
         "ttk": 42.3,
         "accuracy": 82.85,
         "rng_str": 132.0,
         "rng_acc": 248.0,
-        "pray_bonus": 14.0
+        "pray_bonus": 14.0,
+        "cttk": 42.7,
+        "cdps": 7.381,
+        "cexp_hit": 22.1
     },
     "Dragon hunter crossbow_Runite Bolts_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ranging cape (t)_Pegasian boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 58.0,
-        "exp_hit": 24.0,
+        "max_hit": 66,
+        "exp_hit": 24.9,
         "dps": 8.013,
         "ttk": 41.7,
         "accuracy": 82.85,
         "rng_str": 142.0,
         "rng_acc": 248.0,
-        "pray_bonus": 14.0
+        "pray_bonus": 14.0,
+        "cttk": 40.6,
+        "cdps": 7.76,
+        "cexp_hit": 23.3
     },
     "Dragon hunter crossbow_Runite Bolts_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Pegasian boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 58.0,
-        "exp_hit": 24.0,
+        "max_hit": 66,
+        "exp_hit": 24.9,
         "dps": 8.013,
         "ttk": 41.7,
         "accuracy": 82.85,
         "rng_str": 142.0,
         "rng_acc": 248.0,
-        "pray_bonus": 14.0
+        "pray_bonus": 14.0,
+        "cttk": 40.6,
+        "cdps": 7.76,
+        "cexp_hit": 23.3
     },
     "Dragon hunter crossbow_Runite Bolts_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Pegasian boots_Archers ring (i)_Rigour": {
-        "max_hit": 58.0,
-        "exp_hit": 24.2,
+        "max_hit": 66,
+        "exp_hit": 25.0,
         "dps": 8.055,
         "ttk": 41.5,
         "accuracy": 83.27,
         "rng_str": 142.0,
         "rng_acc": 256.0,
-        "pray_bonus": 6.0
+        "pray_bonus": 6.0,
+        "cttk": 40.4,
+        "cdps": 7.794,
+        "cexp_hit": 23.4
     },
     "Dragon hunter crossbow_Runite Bolts_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ranging cape (t)_Pegasian boots_Archers ring (i)_Rigour": {
-        "max_hit": 57.0,
-        "exp_hit": 23.6,
+        "max_hit": 65,
+        "exp_hit": 24.5,
         "dps": 7.875,
         "ttk": 42.4,
         "accuracy": 82.85,
         "rng_str": 140.0,
         "rng_acc": 248.0,
-        "pray_bonus": 10.0
+        "pray_bonus": 10.0,
+        "cttk": 41.3,
+        "cdps": 7.634,
+        "cexp_hit": 22.9
     },
     "Dragon hunter crossbow_Diamond bolts (e)_Saradomin coif_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Devout Boots_Archers ring (i)_Rigour": {
-        "max_hit": 63.0,
+        "max_hit": 63,
         "exp_hit": 23.5,
         "dps": 7.848,
         "ttk": 42.5,
         "accuracy": 82.34,
         "rng_str": 130.0,
         "rng_acc": 239.0,
-        "pray_bonus": 11.0
+        "pray_bonus": 11.0,
+        "cttk": 42.9,
+        "cdps": 7.342,
+        "cexp_hit": 22.0
     },
     "Dragon hunter crossbow_Diamond bolts (e)_Masori mask (f)_Masori body (f)_Saradomin chaps_Zaryte vambraces_Ava's assembler_Devout Boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 63.0,
+        "max_hit": 63,
         "exp_hit": 23.3,
         "dps": 7.782,
         "ttk": 42.8,
         "accuracy": 81.54,
         "rng_str": 130.0,
         "rng_acc": 226.0,
-        "pray_bonus": 19.0
+        "pray_bonus": 19.0,
+        "cttk": 43.3,
+        "cdps": 7.28,
+        "cexp_hit": 21.8
     },
     "Dragon hunter crossbow_Diamond bolts (e)_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Devout Boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 63.0,
+        "max_hit": 63,
         "exp_hit": 23.5,
         "dps": 7.833,
         "ttk": 42.6,
         "accuracy": 82.16,
         "rng_str": 132.0,
         "rng_acc": 236.0,
-        "pray_bonus": 19.0
+        "pray_bonus": 19.0,
+        "cttk": 43.0,
+        "cdps": 7.327,
+        "cexp_hit": 22.0
     },
     "Dragon hunter crossbow_Diamond bolts (e)_Masori mask (f)_Saradomin d'hide body_Masori chaps (f)_Zaryte vambraces_Ava's assembler_Pegasian boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 63.0,
+        "max_hit": 63,
         "exp_hit": 23.5,
         "dps": 7.828,
         "ttk": 42.6,
         "accuracy": 82.1,
         "rng_str": 128.0,
         "rng_acc": 235.0,
-        "pray_bonus": 14.0
+        "pray_bonus": 14.0,
+        "cttk": 43.0,
+        "cdps": 7.325,
+        "cexp_hit": 22.0
     }
 }

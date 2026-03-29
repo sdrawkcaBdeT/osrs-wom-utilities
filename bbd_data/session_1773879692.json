@@ -24,14 +24,17 @@
         "pray_restore": "Moonlight Moth"
     },
     "theoretical_stats": {
-        "max_hit": 63.0,
+        "max_hit": 63,
         "exp_hit": 23.5,
         "dps": 7.848,
         "ttk": 42.5,
         "accuracy": 82.34,
         "rng_str": 130.0,
         "rng_acc": 239.0,
-        "pray_bonus": 11.0
+        "pray_bonus": 11.0,
+        "cttk": 42.9,
+        "cdps": 7.345,
+        "cexp_hit": 22.0
     },
     "loot_summary": {
         "Dragon bones": 48,
