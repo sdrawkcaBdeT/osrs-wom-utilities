@@ -1,0 +1,57 @@
+flowchart TB
+    subgraph RuneLite_Environment["RuneLite Client (Java Environment)"]
+        direction TB
+        Game_Events["In-Game Actions\n(Hitsplats, Loot, Ticks, Spawns)"]
+        Plugin["BBDTrackerPlugin.java\n(Event Hook & Payload Formatter)"]
+
+        Game_Events -->|Triggers| Plugin
+    end
+
+    subgraph Python_Backend["BBD Tracker Server & UI (Python)"]
+        direction TB
+        User_Input["User Input\n(Start/Stop Session, Manual Kill)"]
+        Flask["Flask HTTP Server\n(Port 5000 - /event)"]
+        UDP["UDP Listener\n(Port 5005 - Fast Ticks)"]
+        App["BBDTrackerApp (bbd_tracker.py)\n(Core Logic & UI Aggregator)"]
+
+        Plugin -->|HTTP POST JSON| Flask
+        Plugin -->|UDP Datagrams JSON| UDP
+
+        User_Input -->|Tkinter Events| App
+        Flask -->|Event Routing| App
+        UDP -->|Queue Processing| App
+    end
+
+    subgraph Data_Pipeline["Orchestration & Data Pipeline"]
+        direction TB
+        Datahub["datahub.py\n(The Orchestrator)"]
+        MainUpdater["main.py\n(WOM Auto-Updater)"]
+        Archiver["archiver.py\n(WOM Archiver)"]
+        Pipeline["pipeline.py\n(Market & Enrichment Scripts)"]
+
+        Datahub -->|Launches| MainUpdater
+        Datahub -->|Launches| Archiver
+        Datahub -->|Executes Sequence| Pipeline
+    end
+
+    subgraph Storage_Layer["Local Storage & Databases"]
+        direction TB
+        Combat_DB[/"combat_telemetry.db\n(SQLite)"/]
+        Session_JSON[/"bbd_data/*.json\n(Session Records)"/]
+        WOM_DB[/"wom_master.db\n(SQLite)"/]
+        Eco_Files[/"live_wealth.json / items.csv\n(Economy Data)"/]
+
+        App -->|Saves Hitsplats & Ticks| Combat_DB
+        App -->|Saves Session Summaries| Session_JSON
+        Archiver -->|Syncs Player Snapshots| WOM_DB
+        Pipeline -->|Generates / Updates| Eco_Files
+    end
+
+    subgraph Overlays["Overlay Renderers"]
+        direction TB
+        GUI["bbd_gui.py\n(Transparent Tkinter HUD)"]
+
+        Combat_DB -.->|Reads Live Telemetry| GUI
+        Session_JSON -.->|Reads Session History| GUI
+        Eco_Files -.->|Reads Pricing & Wealth| GUI
+    end

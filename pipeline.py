@@ -9,7 +9,8 @@ PIPELINE_SCRIPTS =[
     "enrich_gpph.py",
     "wealth_engine.py",
     "normalize_sessions.py",
-    "daily_report.py"  # <--- NEW ADDITION
+    "daily_report.py",  # <--- NEW ADDITION
+    "market_index_builder.py"
 ]
 
 def run_pipeline():
