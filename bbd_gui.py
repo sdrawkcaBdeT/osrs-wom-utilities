@@ -206,7 +206,10 @@ class BBDGUI:
                         'trips': trips,
                         'gross_gp': gross_gp,
                         'net_profit': net_profit,
-                        'theo_ttk': theo.get('ttk', 0), 'theo_dps': theo.get('dps', 0), 'theo_acc': theo.get('accuracy', 0),
+                        'theo_ttk': theo.get('cttk', theo.get('ttk', 0)),
+                        'theo_dps': theo.get('cdps', theo.get('dps', 0)),
+                        'theo_acc': theo.get('accuracy', 0),
+                        'cexp_hit': theo.get('cexp_hit', theo.get('exp_hit', 0)),
                         'duration_gpph': duration_gpph
                     })
             except Exception:
@@ -263,7 +266,7 @@ class BBDGUI:
     def draw_history(self):
         c = self.win_history.canvas
         c.delete("all")
-        headers = f"{'SESS':<6} {'DATE':<11} {'KILLS':>5} {'ΔTTK':>5} {'ASTB':>4} {'MISS':>4} {'EFF%':>4} {'LtLCK':>6}"
+        headers = f"{'SESS':<6} {'DATE':<11} {'KILLS':>5} {'ΔcTTK':>5} {'ASTB':>4} {'MISS':>4} {'EFF%':>4} {'LtLCK':>6}"
         self.draw_text(c, 10, 5, headers, HEADER_COLOR, FONT_BOLD)
         c.create_line(10, 20, 350, 20, fill="gray")
         y = 25
@@ -291,7 +294,7 @@ class BBDGUI:
         now = datetime.now()
         periods = [("24h", 24), ("3d", 72), ("7d", 168), ("30d", 720)]
 
-        headers = f"{'PERIOD':<6} {'SESS':<4} {'HRS':<4} {'R-HR':<4}| {'LtLCK':>5} {'NGP/s':>5} {'ASTB':>4} {'MISS':>4} {'EFF%':>4} | {'KILLS':>5} {'K/HR':>4} {'ΔTTK':>5}"
+        headers = f"{'PERIOD':<6} {'SESS':<4} {'HRS':<4} {'R-HR':<4}| {'LtLCK':>5} {'NGP/s':>5} {'ASTB':>4} {'MISS':>4} {'EFF%':>4} | {'KILLS':>5} {'K/HR':>4} {'ΔcTTK':>5}"
         self.draw_text(c, 10, 5, headers, HEADER_COLOR, FONT_BOLD)
         c.create_line(10, 20, 515, 20, fill="gray")
 
@@ -550,7 +553,7 @@ class BBDGUI:
             self.draw_text(c, 10, 10, "No attacks logged in current session.", "gray")
             return
 
-        theo_dps, theo_acc, theo_ttk, act_ttk = 0, 0, 0, 0
+        theo_dps, theo_acc, theo_ttk, act_ttk, cexp_hit = 0, 0, 0, 0, 0
         
         active_session = next((s for s in self.sessions if s.get('id') == latest_session), None)
         
@@ -558,6 +561,7 @@ class BBDGUI:
             theo_dps = active_session.get('theo_dps', 0)
             theo_acc = active_session.get('theo_acc', 0)
             theo_ttk = active_session.get('theo_ttk', 0)
+            cexp_hit = active_session.get('cexp_hit', 0)
             
             if active_session['kills'] > 0: 
                 act_ttk = active_session['active_sec'] / active_session['kills']
@@ -568,25 +572,30 @@ class BBDGUI:
         
         act_acc = ((bolts_fired - zeroes) / bolts_fired) * 100 if bolts_fired > 0 else 0
         act_dps = total_dmg / (bolts_fired * 3.0) if bolts_fired > 0 else 0
+        act_hit = total_dmg / bolts_fired if bolts_fired > 0 else 0
         
         d_dps = act_dps - theo_dps if theo_dps > 0 else 0
         d_acc = act_acc - theo_acc if theo_acc > 0 else 0
         d_ttk = act_ttk - theo_ttk if (theo_ttk > 0 and act_ttk > 0) else 0
+        d_hit = act_hit - cexp_hit if cexp_hit > 0 else 0
 
         self.draw_text(c, 10, 5, "LIVE COMBAT TELEMETRY", HEADER_COLOR, ("Consolas", 10, "bold"))
         c.create_line(10, 20, 340, 20, fill="gray")
         
         def draw_stat(x, label, actual, delta, is_ttk=False):
-            self.draw_text(c, x, 25, f"{label}: {actual}", TEXT_COLOR, ("Consolas", 8, "bold"))
+            # Formatted compactly to fit 4 stats horizontally
+            self.draw_text(c, x, 25, f"{label}:{actual}", TEXT_COLOR, ("Consolas", 8, "bold"))
             if delta != 0:
                 if is_ttk: color = "#00FF00" if delta < 0 else "#FF4444"
                 else: color = "#00FF00" if delta > 0 else "#FF4444"
-                offset = x + len(f"{label}: {actual}") * 6
+                offset = x + len(f"{label}:{actual}") * 6
                 self.draw_text(c, offset, 25, f"({delta:+.1f})", color, ("Consolas", 8, "bold"))
         
-        draw_stat(10, "DPS", f"{act_dps:.1f}", d_dps, is_ttk=False)
-        draw_stat(120, "Acc", f"{act_acc:.0f}%", d_acc, is_ttk=False)
-        draw_stat(230, "TTK", f"{act_ttk:.1f}s", d_ttk, is_ttk=True)
+        # Render the 4 Calibrated Live Stats
+        draw_stat(10, "cDPS", f"{act_dps:.1f}", d_dps, is_ttk=False)
+        draw_stat(95, "cHit", f"{act_hit:.1f}", d_hit, is_ttk=False)
+        draw_stat(187, "Ac", f"{act_acc:.0f}", d_acc, is_ttk=False)
+        draw_stat(255, "cTTK", f"{act_ttk:.1f}", d_ttk, is_ttk=True)
 
         bins = [0] * 7
         for h in hits:
