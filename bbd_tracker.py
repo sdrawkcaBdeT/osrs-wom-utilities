@@ -13,6 +13,7 @@ import pygame
 import sqlite3
 import socket
 import logging
+from cdps_simulator import simulate_bbd_combat
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -481,38 +482,58 @@ class BBDTrackerApp(ctk.CTk):
         if sig in self.dps_profiles:
             stats = self.dps_profiles[sig]
             self.ent_max_hit.delete(0, 'end'); self.ent_max_hit.insert(0, str(stats.get("max_hit", "")))
-            self.ent_exp_hit.delete(0, 'end'); self.ent_exp_hit.insert(0, str(stats.get("exp_hit", "")))
-            self.ent_dps.delete(0, 'end'); self.ent_dps.insert(0, str(stats.get("dps", "")))
-            self.ent_ttk.delete(0, 'end'); self.ent_ttk.insert(0, str(stats.get("ttk", "")))
+            
+            # Prioritize calibrated metrics, fallback to old metrics if not yet backfilled
+            self.ent_exp_hit.delete(0, 'end'); self.ent_exp_hit.insert(0, str(stats.get("cexp_hit", stats.get("exp_hit", ""))))
+            self.ent_dps.delete(0, 'end'); self.ent_dps.insert(0, str(stats.get("cdps", stats.get("dps", ""))))
+            self.ent_ttk.delete(0, 'end'); self.ent_ttk.insert(0, str(stats.get("cttk", stats.get("ttk", ""))))
+            
             self.ent_acc.delete(0, 'end'); self.ent_acc.insert(0, str(stats.get("accuracy", "")))
-
             self.ent_rng_str.delete(0, 'end'); self.ent_rng_str.insert(0, str(stats.get("rng_str", "")))
             self.ent_rng_acc.delete(0, 'end'); self.ent_rng_acc.insert(0, str(stats.get("rng_acc", "")))
             self.ent_pray_bonus.delete(0, 'end'); self.ent_pray_bonus.insert(0, str(stats.get("pray_bonus", "")))
 
             self.lbl_profile_status.configure(text="Profile Loaded ✓", text_color="green")
         else:
-            for ent in[self.ent_max_hit, self.ent_exp_hit, self.ent_dps, self.ent_ttk, self.ent_acc, self.ent_rng_str, self.ent_rng_acc, self.ent_pray_bonus]:
+            for ent in [self.ent_max_hit, self.ent_exp_hit, self.ent_dps, self.ent_ttk, self.ent_acc, self.ent_rng_str, self.ent_rng_acc, self.ent_pray_bonus]:
                 ent.delete(0, 'end')
-            self.lbl_profile_status.configure(text="New Setup! Enter Stats.", text_color="yellow")
+            self.lbl_profile_status.configure(text="New Setup! Enter Rng Str/Acc.", text_color="yellow")
 
     def save_current_profile(self):
         sig = self.get_loadout_signature()
         try:
+            # 1. Grab raw stats from the UI
+            r_str = float(self.ent_rng_str.get() or 0)
+            r_acc = float(self.ent_rng_acc.get() or 0)
+            
+            # 2. Grab modifiers from the dropdowns
+            weapon = self.cfg_weapon.get()
+            ammo = self.cfg_ammo.get()
+            prayer = self.cfg_pray.get()
+            
+            # 3. Run the native simulation (100,000 iterations in ~0.15s)
+            stats = simulate_bbd_combat(rng_str=r_str, rng_acc=r_acc, weapon=weapon, ammo=ammo, prayer=prayer)
+            
+            # 4. Save the calibrated profile
             self.dps_profiles[sig] = {
-                "max_hit": float(self.ent_max_hit.get() or 0),
-                "exp_hit": float(self.ent_exp_hit.get() or 0),
-                "dps": float(self.ent_dps.get() or 0),
-                "ttk": float(self.ent_ttk.get() or 0),
-                "accuracy": float(self.ent_acc.get() or 0),
-                "rng_str": float(self.ent_rng_str.get() or 0),
-                "rng_acc": float(self.ent_rng_acc.get() or 0),
-                "pray_bonus": float(self.ent_pray_bonus.get() or 0)
+                "max_hit": stats.get("max_hit", 0),
+                "exp_hit": stats.get("exp_hit", 0),
+                "cexp_hit": stats.get("cexp_hit", 0),
+                "cdps": stats.get("cdps", 0),
+                "cttk": stats.get("cttk", 0),
+                "accuracy": stats.get("accuracy", 0),
+                "rng_str": r_str,
+                "rng_acc": r_acc,
+                "pray_bonus": float(self.ent_pray_bonus.get() or 0) 
             }
             self.save_dps_profiles()
-            self.lbl_profile_status.configure(text="Profile Saved ✓", text_color="green")
+            
+            # Force the UI to visually refresh with the newly calculated numbers
+            self.check_dps_profile()
+            self.lbl_profile_status.configure(text="Calibrated & Saved ✓", text_color="green")
+            
         except ValueError:
-            self.lbl_profile_status.configure(text="Error: Valid numbers only", text_color="red")
+            self.lbl_profile_status.configure(text="Error: Valid Rng Str/Acc required", text_color="red")
 
         # === CENTER PANEL ===
         self.panel_center = ctk.CTkFrame(self)
