@@ -65,17 +65,15 @@
         "cexp_hit": 23.1
     },
     "Dragon hunter crossbow_Runite Bolts_Masori mask (f)_Masori body (f)_Masori chaps (f)_Zaryte vambraces_Ranging cape (t)_Devout Boots_Ring of the gods (i)_Rigour": {
-        "max_hit": 65,
-        "exp_hit": 24.2,
-        "dps": 7.763,
-        "ttk": 43.0,
+        "max_hit": 57,
+        "exp_hit": 23.3,
+        "cexp_hit": 21.8,
+        "cdps": 7.257,
+        "cttk": 43.4,
         "accuracy": 81.67,
         "rng_str": 140.0,
         "rng_acc": 228.0,
-        "pray_bonus": 23.0,
-        "cttk": 41.8,
-        "cdps": 7.538,
-        "cexp_hit": 22.6
+        "pray_bonus": 23.0
     },
     "Dragon hunter crossbow_Runite Bolts_Saradomin coif_Saradomin d'hide body_Saradomin chaps_Saradomin bracers_Ranging cape (t)_Saradomin d'hide boots_Ring of the gods (i)_Rigour": {
         "max_hit": 63,

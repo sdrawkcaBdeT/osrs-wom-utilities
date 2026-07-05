@@ -1,0 +1,7 @@
+rebalance_date,item_id,action,prior_weight,new_weight,prior_rank,new_rank,reason,item_name
+2026-04-01,566,ADD,0.0,0.005314351523171029,,92.0,Entered Top 100,Soul rune
+2026-04-01,26372,ADD,0.0,0.005076558031494803,,99.0,Entered Top 100,Nihil horn
+2026-04-01,3024,DROP,0.005000384160438537,0.0,99.0,,Fell below Top 100,Super restore(4)
+2026-04-01,6737,DROP,0.004979691178385555,0.0,100.0,,Fell below Top 100,Berserker ring
+2026-05-01,26233,ADD,0.0,0.005047326214411406,,98.0,Entered Top 100,Ancient godsword
+2026-05-01,21034,DROP,0.0050967649131942305,0.0,98.0,,Fell below Top 100,Dexterous prayer scroll

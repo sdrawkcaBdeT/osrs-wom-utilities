@@ -8,7 +8,7 @@ import matplotlib.patheffects as path_effects
 from datetime import datetime
 
 # --- CONFIG ---
-HISTORY_CSV = "wealth_history.csv"
+HISTORY_CSV = "../wealth_history.csv"
 OUTPUT_DIR = "../analytics_output"
 
 if not os.path.exists(OUTPUT_DIR):
